@@ -7,7 +7,7 @@ from model import SusTarget
 COLOR_BAR = ["red", "blue", "green", "yellow"]
 
 if __name__ == "__main__":
-    with open("./input_test2.json", "r", encoding='utf8') as f:
+    with open("input/input_test7.json", "r", encoding='utf8') as f:
         task_dict_info = json.load(f)
 
     with open("./output.json", 'r', encoding='utf8') as f:

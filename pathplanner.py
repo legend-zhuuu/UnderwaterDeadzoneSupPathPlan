@@ -16,11 +16,7 @@ FILE = os.path.dirname(__file__)
 if FILE not in sys.path:
     sys.path.append(FILE)
 
-from simple_env import SimpleEnv
-import simple_planner
-from simple_controller import SimpleController
-import centralized_hungarian_nx
-from FSMcontroller import CollisionAvoidance
+from simple_planner import Planner
 from model import Point, Vessel, SusTarget, Target, Area
 
 
@@ -440,9 +436,6 @@ class PathPlanner:
             print("four paths may cross!")
             return sorted_assignment_list
 
-    def avoid_tar_pos(self, start_point, end_point):
-        pass
-
     def output_json(self, assignment_list, system_state):
         assignment_list = self.remake_assignment_list(assignment_list)
         # print(assignment_list)
@@ -461,11 +454,6 @@ class PathPlanner:
 
             path_point_list = list()
             ves_start_pos = ves.pos
-            path_point = {
-                "coord": [ves_start_pos.x, ves_start_pos.y],
-                "spd": self.search_spd
-            }
-            path_point_list.append(path_point)
 
             task_points = assignment_list[i]
             prev_point = ves_start_pos
@@ -552,58 +540,15 @@ class PathPlanner:
 
     def path_plan(self):
         start_time = time.time()
-        args = self.get_args()
-        task_ves_info = self.task_ves_info
-        seed_val = self.set_seed(args.seed_val)
         assignment_list = list()
         if not self.work_state:
             ves_dict = self.output_json(assignment_list, self.system_state)
             return ves_dict
-        # create environment ---------------------------------------------------------
-        nsteps = 1000
-        params = importlib.import_module(args.params_name)
-        params = params.Params(args)
-        env = SimpleEnv(params, task_ves_info)
-        robot_diameter = env.robot_diameter
-        # print(params.dt)
-        # print(params.eps)
 
-        # process planner argument------------------------------------------------------
-        if args.planner == 'from_file':
-            print("This function has been removed.")
-        else:
-            planner_file = importlib.import_module(args.planner)
-            planner = planner_file.Planner(env)
-            assignment_list = planner.plan()
-            # assignment_list = planner.my_plan()
+        planner = Planner(self.vessel_list, self.sustarget_list)
+        assignment_list = planner.plan()
+        # assignment_list = planner.my_plan()
 
-        # process controller argument-------------------------------------------------
-        if args.controller == 'simple_controller':
-            controller = SimpleController(env)
-        elif args.controller == 'FSMcontroller':
-            controller = CollisionAvoidance(env)
-        else:
-            raise Exception('invalid argument for --controller')
-
-        env.assignment_list = assignment_list
-        env.build_assignment_matrix()
-
-        # run controller---------------------------------------------------------------
-        t = 0
-        done = False
-        current_tasks = np.zeros((env.n_agents,))
-
-        while t < nsteps and not done:
-            # calculate controls
-            actions = controller.get_actions()
-
-            # apply controls
-            newstate, completion = env.step(actions)
-
-            done = completion.all()
-            t += 1
-
-        # env.plot()
         print("tasks allocation end!")
         ves_dict = self.output_json(assignment_list, self.system_state)
         end_time = time.time()
@@ -614,7 +559,7 @@ class PathPlanner:
 
 if __name__ == "__main__":
     # path = "./input.json"
-    path = "./input_test2.json"
+    path = "input/input_test7.json"
 
     with open(path, 'r', encoding="utf8") as f:
         task_ves_info = json.load(f)
