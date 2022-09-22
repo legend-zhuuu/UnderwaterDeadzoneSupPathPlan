@@ -34,6 +34,8 @@ class PathPlanner:
         self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
         self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
         self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
+        self.sonar_length_plus = 5
+        self.target_threat_radius_plus = 20
         self.initial = self.task_ves_info["content"]["arguments"]["initial"]
 
         # system arguments
@@ -192,6 +194,15 @@ class PathPlanner:
             return True
         return False
 
+    def pass_through_sus_tar(self, start_point, end_point):
+        for sus_tar in self.sustarget_list:
+            if self.point_in_area(start_point, sus_tar) or self.point_in_area(end_point, sus_tar):
+                return sus_tar, True
+            if self.is_intersec(sus_tar.ld_angle, sus_tar.ru_angle, start_point, end_point) or \
+                    self.is_intersec(sus_tar.lu_angle, sus_tar.rd_angle, start_point, end_point):
+                return sus_tar, True
+            return [], False
+
     def pass_through_obs(self, start_point, end_point):
         obs_flag = False
         geo = self.geod.Direct(start_point.x - 90, start_point.y, 0, self.target_threat_radius)
@@ -260,10 +271,14 @@ class PathPlanner:
 
     def insert_path_point(self, start_point, end_point, obs):
         insert_obs_list = list()
-        geo1 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, -45, self.target_threat_radius * 1.414 + 10)
-        geo2 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, 45, self.target_threat_radius * 1.414 + 10)
-        geo3 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, -135, self.target_threat_radius * 1.414 + 10)
-        geo4 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, 135, self.target_threat_radius * 1.414 + 10)
+        geo1 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, -45,
+                                self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
+        geo2 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, 45,
+                                self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
+        geo3 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, -135,
+                                self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
+        geo4 = self.geod.Direct(obs.pos.x - 90, obs.pos.y, 135,
+                                self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
         angle_point_rd = Point([geo1["lat2"] + 90, geo1["lon2"]])
         angle_point_ru = Point([geo2["lat2"] + 90, geo2["lon2"]])
         angle_point_ld = Point([geo3["lat2"] + 90, geo3["lon2"]])
@@ -277,20 +292,36 @@ class PathPlanner:
                     (not self.is_intersec(angle_point, end_point, angle_point_list[1], angle_point_list[2])):
                 return [angle_point]
         else:
-            if obs.pos.x < start_point.x:
-                if start_point.y < end_point.y:
-                    insert_obs_list.append(angle_point_rd)
-                    insert_obs_list.append(angle_point_ru)
+            if abs(end_point.x - start_point.x) < abs(end_point.y - start_point.y):
+                if obs.pos.x < start_point.x:
+                    if start_point.y < end_point.y:
+                        insert_obs_list.append(angle_point_rd)
+                        insert_obs_list.append(angle_point_ru)
+                    else:
+                        insert_obs_list.append(angle_point_ru)
+                        insert_obs_list.append(angle_point_rd)
                 else:
-                    insert_obs_list.append(angle_point_ru)
-                    insert_obs_list.append(angle_point_rd)
+                    if start_point.y < end_point.y:
+                        insert_obs_list.append(angle_point_ld)
+                        insert_obs_list.append(angle_point_lu)
+                    else:
+                        insert_obs_list.append(angle_point_lu)
+                        insert_obs_list.append(angle_point_ld)
             else:
-                if start_point.y < end_point.y:
-                    insert_obs_list.append(angle_point_ld)
-                    insert_obs_list.append(angle_point_lu)
+                if obs.pos.y < start_point.y:
+                    if start_point.x < end_point.x:
+                        insert_obs_list.append(angle_point_lu)
+                        insert_obs_list.append(angle_point_ru)
+                    else:
+                        insert_obs_list.append(angle_point_ru)
+                        insert_obs_list.append(angle_point_lu)
                 else:
-                    insert_obs_list.append(angle_point_lu)
-                    insert_obs_list.append(angle_point_ld)
+                    if start_point.x < end_point.x:
+                        insert_obs_list.append(angle_point_ld)
+                        insert_obs_list.append(angle_point_rd)
+                    else:
+                        insert_obs_list.append(angle_point_rd)
+                        insert_obs_list.append(angle_point_ld)
         return insert_obs_list
 
     def find_next_point(self, area, prev_point, next_area):
