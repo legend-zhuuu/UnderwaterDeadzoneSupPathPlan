@@ -22,6 +22,7 @@ if __name__ == "__main__":
     target_info = task_dict_info["content"]["arguments"]["targetInfo"]
     sus_target_info = task_dict_info["content"]["arguments"]["susTargetInfo"]
     target_thread_radius = task_dict_info["content"]["arguments"]["config"]["targetThreatRadius"]
+    dead_zone_width = task_dict_info["content"]["arguments"]["config"]["deadZoneWidth"]
 
     for ves_i in ves_info:
         ves_id = ves_i["tid"]
@@ -40,7 +41,7 @@ if __name__ == "__main__":
         cir = Circle(xy=target_i["targetPos"], radius=target_thread_radius / 111000)
         ax.add_patch(cir)
     for sus_target_i in sus_target_info:
-        sus_tar = SusTarget(sus_target_i["susTargetId"], sus_target_i["susTargetArea"])
+        sus_tar = SusTarget(sus_target_i["susTargetId"], sus_target_i["susTargetArea"], dead_zone_width)
         rec = Rectangle(xy=(sus_tar.ld_angle.x, sus_tar.ld_angle.y), width=(sus_tar.rd_angle.x - sus_tar.ld_angle.x),
                         height=(sus_tar.lu_angle.y - sus_tar.ld_angle.y))
         ax.add_patch(rec)
