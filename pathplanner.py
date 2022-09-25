@@ -187,14 +187,18 @@ class PathPlanner:
                 return item, True
         return [], False
 
-    def path_success(self, point_list):
+    def path_success(self, point_list, prev_point):
         for index in range(len(point_list) - 1):
+            if index == 0:
+                p0 = prev_point
+            else:
+                p0 = p1
             p1 = point_list[index]
             p2 = point_list[index + 1]
             item, flag = self.pass_through_sus_tar_or_obs(p1, p2)
             if flag:
-                return p1, p2, item, True
-        return None, None, None, False
+                return p0, p1, p2, item, True
+        return None, None, None, None, False
 
     def out_map(self, point1, point2):
         if point1.x < self.task_area.ld_angle.x or point1.x > self.task_area.ru_angle.x or \
@@ -282,61 +286,59 @@ class PathPlanner:
                 # time.sleep(10)
         return insert_obs_list
 
-    def insert_acute_path_point(self, point1, point2, point3, option):
+    def insert_acute_path_point(self, point1, point2, point3):
         insert_point_list = list()
-        if option == 'behind_point2':
-            _lambda = (point1.x - point2.x) * (point3.x - point2.x) + (point1.y - point2.y) * (point3.y - point2.y) / (
-                    (point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2)
-            H = point2 + Point([_lambda * (point1 - point2).x, _lambda * (point1 - point2).y])
-            vec1 = point3 - H  # HP3
-            # vec_len = np.linalg.norm([vec1.x, vec1.y])
-            # norm_vec = Point([vec1.x / vec_len, vec1.y / vec_len])
-            angle = math.atan2(vec1.y, vec1.x) * 180 / math.pi
-            vec2 = point2 - point1  # P1P2
-            sign = np.sign(vec2.x * vec1.y - vec2.y * vec1.x)  # P1P2 cross HP3
-            direction = math.atan2(vec2.y, vec2.x) * 180 / math.pi
-            circle_sample = list()
-            prev_point = point2
-            step = 30
-            length = np.sqrt(2 * self.turn_radius ** 2 - 2 * (self.turn_radius ** 2) * np.cos(step * np.pi / 180))
-            for deg in range(step, 180, step):
-                _direction = 90 - direction - sign * deg
-                circle_sample.append(Point([
-                    self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lon2"],
-                    self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lat2"]
-                ]))
-                prev_point = circle_sample[-1]
-            #
-            # x, y = [p.x for p in circle_sample], [p.y for p in circle_sample]
-            # x = [point1.x, point2.x] + x
-            # y = [point1.y, point2.y] + y
-            # plt.plot(x, y)
-            # plt.show()
-            prev_point = point1
-            start_point = point2
-            end_point = point3
-            flag = False
-            while not flag:
-                try:
-                    sample_point = circle_sample.pop(0)
-                except IndexError:
-                    print("Error! run out of sample!")
-                for tar in self.target_list:
-                    if self.point_in_area(sample_point, tar):
-                        print("path in target area, return.")
-                        flag = True
-                        break
-                if not flag:
-                    if not self.is_large_than_degree(sample_point, start_point, end_point):
-                        insert_point_list.append(sample_point)
-                        start_point = sample_point
-                    else:
-                        insert_point_list.append(sample_point)
-                        return insert_point_list
+
+        _lambda = (point1.x - point2.x) * (point3.x - point2.x) + (point1.y - point2.y) * (point3.y - point2.y) / (
+                (point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2)
+        H = point2 + Point([_lambda * (point1 - point2).x, _lambda * (point1 - point2).y])
+        vec1 = point3 - H  # HP3
+        # vec_len = np.linalg.norm([vec1.x, vec1.y])
+        # norm_vec = Point([vec1.x / vec_len, vec1.y / vec_len])
+        angle = math.atan2(vec1.y, vec1.x) * 180 / math.pi
+        vec2 = point2 - point1  # P1P2
+        sign = np.sign(vec2.x * vec1.y - vec2.y * vec1.x)  # P1P2 cross HP3
+        direction = math.atan2(vec2.y, vec2.x) * 180 / math.pi
+        circle_sample = list()
+        prev_point = point2
+        step = 30
+        length = np.sqrt(2 * self.turn_radius ** 2 - 2 * (self.turn_radius ** 2) * np.cos(step * np.pi / 180))
+        for deg in range(step, 180, step):
+            _direction = 90 - direction - sign * deg
+            circle_sample.append(Point([
+                self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lon2"],
+                self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lat2"]
+            ]))
+            prev_point = circle_sample[-1]
+        #
+        # x, y = [p.x for p in circle_sample], [p.y for p in circle_sample]
+        # x = [point1.x, point2.x] + x
+        # y = [point1.y, point2.y] + y
+        # plt.plot(x, y)
+        # plt.show()
+        prev_point = point1
+        start_point = point2
+        end_point = point3
+        flag = False
+        while not flag:
+            try:
+                sample_point = circle_sample.pop(0)
+            except IndexError:
+                print("Error! run out of sample!")
+            for tar in self.target_list:
+                if self.point_in_area(sample_point, tar):  # todo: in sus area
+                    print("path in target area, return.")
+                    flag = True
+                    break
+            if not flag:
+                if not self.is_large_than_degree(sample_point, start_point, end_point):
+                    insert_point_list.append(sample_point)
+                    start_point = sample_point
                 else:
-                    return self.insert_path_point(point1, point2, point3, tar)
-        else:
-            pass
+                    insert_point_list.append(sample_point)
+                    return insert_point_list
+            else:
+                return self.insert_path_point(point1, point2, point3, tar)
 
     @staticmethod
     def is_obtuse(A, B, C):
@@ -364,11 +366,12 @@ class PathPlanner:
             point3 = path_list[index + 2]
             if not self.is_obtuse(point2, point1, point3):
                 if index == 0:
-                    insert_point = self.insert_acute_path_point(point1, point2, point3, "behind_point2")
+                    insert_point = self.insert_acute_path_point(point1, point2, point3)
                     ip = _path_list.index(point2)
                     _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
                 elif index == len(path_list) - 3:
-                    insert_point = self.insert_acute_path_point(point1, point2, point3, "before_point2")
+                    insert_point = self.insert_acute_path_point(point3, point2, point1)
+                    insert_point = insert_point[::-1]
                     ip = _path_list.index(point1)
                     _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
                 else:
@@ -440,20 +443,20 @@ class PathPlanner:
                 item, item_flag = self.pass_through_sus_tar_or_obs(start_point, candi[0])
                 dist = np.linalg.norm([start_point.x - candi[0].x, start_point.y - candi[0].y])
                 perform_list.append([candi, item_flag, dist, item])
-                if not item_flag:
-                    out_flag = True
 
             perform_list.sort(key=lambda x: x[2])
             candi, item = perform_list[0][0], perform_list[0][-1]
             out_point_list = [start_point] + candi
             out_point_list = self.acute2obtuse(prev_point, out_point_list)
+            _prev_point = prev_point
+            # out_flag = True
             while not out_flag:
-                p1, p2, item, item_flag = self.path_success(out_point_list)
+                _prev_point, p1, p2, item, item_flag = self.path_success(out_point_list, _prev_point)
                 if not item_flag:
                     out_flag = True
                 else:
                     index = out_point_list.index(p1)
-                    insert_obs_point_list = self.insert_path_point(prev_point, p1, p2, item)
+                    insert_obs_point_list = self.insert_path_point(_prev_point, p1, p2, item)
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
         return out_point_list[1:]
 
@@ -603,7 +606,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test7.json"
+    input_path = "input/input_test6.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:

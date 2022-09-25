@@ -56,7 +56,7 @@ class SusTarget(Area):
         super().__init__(sus_target_area)
         self.id = sus_target_id
         self.type = self.judge_type()
-        self.dead_zone_width = dead_zone_width
+        self.dead_zone_width = 10
         self.plus = 10
         self.ld_angle_extend = None
         self.lu_angle_extend = None
@@ -74,9 +74,9 @@ class SusTarget(Area):
 
     def get_angle_extend(self):
         x, y = self.ld_angle.x, self.ld_angle.y
-        length_geo = self.geod.Direct(y, x, 0, self.dead_zone_width / 2 + self.plus)
+        length_geo = self.geod.Direct(y, x, 0, self.dead_zone_width)
         length = length_geo["lat2"] - y
-        width_geo = self.geod.Direct(y, x, 90, self.dead_zone_width / 2 + self.plus)
+        width_geo = self.geod.Direct(y, x, 90, self.dead_zone_width)
         width = width_geo["lon2"] - x
         self.ld_angle_extend = self.ld_angle - Point([width, length])
         self.lu_angle_extend = self.lu_angle - Point([width, -length])
