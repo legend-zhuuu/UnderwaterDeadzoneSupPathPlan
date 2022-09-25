@@ -58,8 +58,8 @@ class PathPlanner:
         self.load_targets_pos_info()
         self.load_sus_target_info()
         self.load_ves_info()
-        self.print_item(self.target_list[0])
-        self.print_item(self.sustarget_list[0])
+        # self.print_item(self.target_list[0])
+        # self.print_item(self.sustarget_list[0])
 
         # geographiclib
         self.geod = Geodesic.WGS84
@@ -175,28 +175,11 @@ class PathPlanner:
         return False
 
     @staticmethod
-    def point_in_circle(point, center, radius):
-        if np.linalg.norm([point.x - center.x, point.y - center.y]) <= radius:
-            return True
-        return False
-
-    def comp_dist(self, l1, l2, point):
-        return self.cross(l1, l2, point) / np.linalg.norm([l1.x - l2.x, l1.y - l2.y])
-
-    @staticmethod
     def is_obtuse(A, B, C):
         v1 = np.array([B.x - A.x, B.y - A.y])
         v2 = np.array([C.x - A.x, C.y - A.y])
         cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
         if cos < 0:
-            return True
-        return False
-
-    def across_sus_area(self, start_point, end_point, area):
-        if self.point_in_area(start_point, area) or self.point_in_area(end_point, area):
-            return True
-        if self.is_intersec(area.ld_angle, area.ru_angle, start_point, end_point) or \
-                self.is_intersec(area.lu_angle, area.rd_angle, start_point, end_point):
             return True
         return False
 
@@ -209,31 +192,14 @@ class PathPlanner:
                 return item, True
         return [], False
 
-    def pass_through_obs(self, start_point, end_point):
-        obs_flag = False
-        geo = self.geod.Direct(start_point.x - 90, start_point.y, 0, self.target_threat_radius)
-        radius = geo["lat2"] + 90 - start_point.x
-        for tar in self.target_list:
-            center = tar.pos
-            if self.point_in_circle(start_point, center=center, radius=radius) or \
-                    self.point_in_circle(end_point, center, radius):
-                return tar, True
-            else:
-                dist = abs(self.comp_dist(start_point, end_point, center))
-                if dist >= radius:
-                    continue
-                elif dist == 0:
-                    if (start_point.x <= center.x <= end_point.x or start_point.x >= center.x >= end_point.x) and \
-                            (start_point.y <= center.y <= end_point.y or start_point.y >= center.y >= end_point.y):
-                        return tar, True
-                    else:
-                        continue
-                else:
-                    if self.is_obtuse(start_point, end_point, center) or self.is_obtuse(end_point, start_point, center):
-                        continue
-                    else:
-                        return tar, True
-        return [], False
+    def path_success(self, point_list):
+        for index in range(len(point_list) - 1):
+            p1 = point_list[index]
+            p2 = point_list[index + 1]
+            item, flag = self.pass_through_sus_tar_or_obs(p1, p2)
+            if flag:
+                return p1, p2, item, True
+        return None, None, None, False
 
     def out_map(self, point1, point2):
         if point1.x < self.task_area.ld_angle.x or point1.x > self.task_area.ru_angle.x or \
@@ -251,31 +217,8 @@ class PathPlanner:
             return True
         return False
 
-    def go_to_other_angle(self, point, area):
-        if area.type == "west_east":
-            if point.y < area.ld_angle.y:
-                if not self.across_sus_area(point, area.lu_angle, area):
-                    return area.lu_angle
-                else:
-                    return area.ru_angle
-            else:
-                if not self.across_sus_area(point, area.ld_angle, area):
-                    return area.ld_angle
-                else:
-                    return area.rd_angle
-        else:
-            if point.x < area.ld_angle.x:
-                if not self.across_sus_area(point, area.rd_angle, area):
-                    return area.rd_angle
-                else:
-                    return area.ru_angle
-            else:
-                if not self.across_sus_area(point, area.ld_angle, area):
-                    return area.ld_angle
-                else:
-                    return area.lu_angle
-
     def insert_path_point(self, start_point, end_point, item):
+        # todo: 当两个obs靠的很近的时候，迭代出错
         insert_obs_list = list()
         angle_point_list = [item.ld_angle_extend, item.lu_angle_extend, item.rd_angle_extend, item.ru_angle_extend]
 
@@ -318,7 +261,7 @@ class PathPlanner:
                         insert_obs_list.append(item.ld_angle_extend)
         return insert_obs_list
 
-    def find_next_point(self, area, prev_point, next_area):
+    def find_next_point(self, prev_point, start_point, next_area):
         out_point_list = list()
         candi_point_list = list()
         # 将搜索区域的四个顶点向外膨胀危险范围后的点作为预选的起点
@@ -380,53 +323,32 @@ class PathPlanner:
             out_flag = False
             for candi in candi_point_list:
                 # candi = point1 + point2
-                item, item_flag = self.pass_through_sus_tar_or_obs(prev_point, candi[0])
-
-                # area_flag = self.across_sus_area(prev_point, candi[0], area)
-                # next_area_flag = self.across_sus_area(prev_point, candi[0], next_area)
-                dist = np.linalg.norm([prev_point.x - candi[0].x, prev_point.y - candi[0].y])
+                item, item_flag = self.pass_through_sus_tar_or_obs(start_point, candi[0])
+                dist = np.linalg.norm([start_point.x - candi[0].x, start_point.y - candi[0].y])
                 perform_list.append([candi, item_flag, dist, item])
                 if not item_flag:
                     out_flag = True
-            else:
-                if out_flag:
-                    perform_list = [p for p in perform_list if p[1] == False]
-                    perform_list.sort(key=lambda x: x[2])
-                    candi = perform_list[0][0]
-                    out_point_list = out_point_list + candi
-                    return out_point_list
-                perform_list.sort(key=lambda x: x[1], reverse=True)
-                candi, item = perform_list[0][0], perform_list[0][-1]
-                '''
-                if self.across_sus_area(prev_point, candi[0], area):
-                    insert_angle_point = self.go_to_other_angle(prev_point, area)
-                    out_point_list.append(insert_angle_point)
-                    new_point = insert_angle_point
-                    obs, obs_flag = self.pass_through_obs(new_point, candi[0])
-                    if obs_flag:
-                        insert_obs_point_list = self.insert_path_point(new_point, candi[0],
-                                                                       obs)  # todo: 增加对插入路径点后的路径重新判断
-                        out_point_list = out_point_list + insert_obs_point_list
-                        new_point = insert_obs_point_list[-1]
-                    if self.across_sus_area(new_point, candi[0], next_area):
-                        insert_angle_point = self.go_to_other_angle(new_point, next_area)
-                        out_point_list.append(insert_angle_point)
-                        new_point = insert_angle_point
+
+            if out_flag:
+                perform_list = [p for p in perform_list if p[1] == False]
+                perform_list.sort(key=lambda x: x[2])
+                candi = perform_list[0][0]
+                out_point_list = [start_point] + candi
+
+                return out_point_list[-1]
+            perform_list.sort(key=lambda x: x[2])
+            candi, item = perform_list[0][0], perform_list[0][-1]
+            out_point_list = [start_point] + candi
+
+            while not out_flag:
+                p1, p2, item, item_flag = self.path_success(out_point_list)
+                if not item_flag:
+                    out_flag = True
                 else:
-                    obs, obs_flag = self.pass_through_obs(prev_point, candi[0])
-                    new_point = prev_point
-                    if obs_flag:
-                        insert_obs_point_list = self.insert_path_point(new_point, candi[0], obs)
-                        out_point_list = out_point_list + insert_obs_point_list
-                        new_point = insert_obs_point_list[-1]
-                    if self.across_sus_area(new_point, candi[0], next_area):
-                        insert_angle_point = self.go_to_other_angle(new_point, next_area)
-                        out_point_list.append(insert_angle_point)
-                        new_point = insert_angle_point
-                '''
-                insert_obs_point_list = self.insert_path_point(prev_point, candi[0], item)
-                out_point_list = out_point_list + insert_obs_point_list + candi
-        return out_point_list
+                    index = out_point_list.index(p1)
+                    insert_obs_point_list = self.insert_path_point(p1, p2, item)
+                    out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
+        return out_point_list[1:]
 
     def remake_assignment_list(self, assignment_list):
         sorted_assignment_list = list()
@@ -484,44 +406,35 @@ class PathPlanner:
             ves_start_pos = ves.pos
 
             task_points = assignment_list[i]
-            prev_point = ves_start_pos
+            start_point = ves_start_pos
 
             first_area_info = self.susTargetInfo[int(task_points[0])]
-            void_area = SusTarget("0000", [
-                [0., 0.1],
-                [0., 0.],
-                [0.1, 0.],
-                [0.1, 0.1],
-                [0., 0.1]
-            ], self.dead_zone_width)
+            void_point = Point([start_point.x - 0.00001, start_point.y])
             first_area = SusTarget(first_area_info["susTargetId"], first_area_info["susTargetArea"], self.dead_zone_width)
 
-            out_path = self.find_next_point(void_area, prev_point, first_area)
+            out_path = self.find_next_point(void_point, start_point, first_area)
 
             for index in range(len(out_path)):
                 point = out_path[index]
-                dist = self.geod.Inverse(point.x - 90, point.y, prev_point.x - 90, prev_point.y)["s12"]
+                dist = self.geod.Inverse(point.x - 90, point.y, start_point.x - 90, start_point.y)["s12"]
                 if index == 0:
-                    vec = point - prev_point
+                    vec = point - start_point
                     angle = math.atan2(vec.y, vec.x) * 180 / math.pi
-                    start_point_dis_geo = self.geod.Direct(prev_point.x - 90, prev_point.y, angle, self.start_point_dis)
+                    start_point_dis_geo = self.geod.Direct(start_point.x - 90, start_point.y, angle, self.start_point_dis)
                     path_point = {
                         "coord": [start_point_dis_geo["lat2"] + 90, start_point_dis_geo["lon2"]],
                         "spd": self.search_spd
                     }
                     path_point_list.append(path_point)
-                if index == len(out_path) - 2:
-                    spd = ves.spd
-                else:
-                    spd = self.search_spd
-                time_cost += dist / (0.514444 * spd)
+                time_cost += dist / (0.514444 * self.search_spd)
                 # print(time_cost)
-                prev_point = point
+                start_point = point
                 path_point = {
                     "coord": [point.x, point.y],
-                    "spd": spd
+                    "spd": self.search_spd
                 }
                 path_point_list.append(path_point)
+            prev_point = out_path[-2]
 
             for task_number in range(len(task_points) - 1):
                 task_point_number = task_points[task_number]
@@ -534,21 +447,18 @@ class PathPlanner:
                                           self.dead_zone_width)
                 else:
                     next_area = None
-                point_list = self.find_next_point(target_area, prev_point, next_area)
-                for index in range(len(point_list)):
-                    point = point_list[index]
-                    dist = self.geod.Inverse(point.x - 90, point.y, prev_point.x - 90, prev_point.y)["s12"]
-                    if index == len(point_list) - 2:
-                        spd = ves.spd
-                    else:
-                        spd = self.search_spd
-                    time_cost += dist / (0.514444 * spd)
-                    prev_point = point
+                out_path = self.find_next_point(prev_point, start_point, next_area)
+                for index in range(len(out_path)):
+                    point = out_path[index]
+                    dist = self.geod.Inverse(point.x - 90, point.y, start_point.x - 90, start_point.y)["s12"]
+                    time_cost += dist / (0.514444 * self.search_spd)
+                    start_point = point
                     path_point = {
                         "coord": [point.x, point.y],
-                        "spd": spd
+                        "spd": self.search_spd
                     }
                     path_point_list.append(path_point)
+                prev_point = out_path[-2]
 
             path_point_dic = dict()
             path_point_dic.update({"shape": "LineString"})
