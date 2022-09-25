@@ -30,6 +30,7 @@ class Area:
         self.rd_angle = self.get_right_down_angle()
         self.ru_angle = self.get_right_up_angle()
         self.center = self.get_center()
+        self.pos = self.center
         self.length = self.rd_angle.x - self.ld_angle.x
         self.width = self.lu_angle.y - self.ld_angle.y
 
@@ -73,10 +74,10 @@ class SusTarget(Area):
 
     def get_angle_extend(self):
         x, y = self.ld_angle.x, self.ld_angle.y
-        length_geo = self.geod.Direct(x - 90, y, 90, self.dead_zone_width / 2 + self.plus)
-        length = length_geo["lon2"] - y
-        width_geo = self.geod.Direct(x - 90, y, 0, self.dead_zone_width / 2 + self.plus)
-        width = width_geo["lat2"] + 90 - x
+        length_geo = self.geod.Direct(y, x, 0, self.dead_zone_width / 2 + self.plus)
+        length = length_geo["lat2"] - y
+        width_geo = self.geod.Direct(y, x, 90, self.dead_zone_width / 2 + self.plus)
+        width = width_geo["lon2"] - x
         self.ld_angle_extend = self.ld_angle - Point([width, length])
         self.lu_angle_extend = self.lu_angle - Point([width, -length])
         self.rd_angle_extend = self.rd_angle - Point([-width, length])
@@ -100,21 +101,32 @@ class Target:
         self.geod = Geodesic.WGS84
         self.geod = Geodesic(6378388, 1 / 297.0)
         self.get_angle_extend()
+        self.get_angle()
 
     def get_angle_extend(self):
-        geo1 = self.geod.Direct(self.pos.x - 90, self.pos.y, -45,
+        geo1 = self.geod.Direct(self.pos.y, self.pos.x, 135,
                                 self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
-        geo2 = self.geod.Direct(self.pos.x - 90, self.pos.y, 45,
+        geo2 = self.geod.Direct(self.pos.y, self.pos.x, 45,
                                 self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
-        geo3 = self.geod.Direct(self.pos.x - 90, self.pos.y, -135,
+        geo3 = self.geod.Direct(self.pos.y, self.pos.x, -135,
                                 self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
-        geo4 = self.geod.Direct(self.pos.x - 90, self.pos.y, 135,
+        geo4 = self.geod.Direct(self.pos.y, self.pos.x, -45,
                                 self.target_threat_radius * 1.414 + self.target_threat_radius_plus)
-        self.rd_angle_extend = Point([geo1["lat2"] + 90, geo1["lon2"]])
-        self.ru_angle_extend = Point([geo2["lat2"] + 90, geo2["lon2"]])
-        self.ld_angle_extend = Point([geo3["lat2"] + 90, geo3["lon2"]])
-        self.lu_angle_extend = Point([geo4["lat2"] + 90, geo4["lon2"]])
-        self.rd_angle = self.rd_angle_extend
-        self.ru_angle = self.ru_angle_extend
-        self.ld_angle = self.ld_angle_extend
-        self.lu_angle = self.lu_angle_extend
+        self.rd_angle_extend = Point([geo1["lon2"], geo1["lat2"]])
+        self.ru_angle_extend = Point([geo2["lon2"], geo2["lat2"]])
+        self.ld_angle_extend = Point([geo3["lon2"], geo3["lat2"]])
+        self.lu_angle_extend = Point([geo4["lon2"], geo4["lat2"]])
+
+    def get_angle(self):
+        geo1 = self.geod.Direct(self.pos.y, self.pos.x, 135,
+                                self.target_threat_radius * 1.414)
+        geo2 = self.geod.Direct(self.pos.y, self.pos.x, 45,
+                                self.target_threat_radius * 1.414)
+        geo3 = self.geod.Direct(self.pos.y, self.pos.x, -135,
+                                self.target_threat_radius * 1.414)
+        geo4 = self.geod.Direct(self.pos.y, self.pos.x, -45,
+                                self.target_threat_radius * 1.414)
+        self.rd_angle = Point([geo1["lon2"], geo1["lat2"]])
+        self.ru_angle = Point([geo2["lon2"], geo2["lat2"]])
+        self.ld_angle = Point([geo3["lon2"], geo3["lat2"]])
+        self.lu_angle = Point([geo4["lon2"], geo4["lat2"]])

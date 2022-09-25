@@ -11,6 +11,7 @@ import json
 from copy import deepcopy
 from itertools import permutations
 from geographiclib.geodesic import Geodesic
+from matplotlib import pyplot as plt
 
 FILE = os.path.dirname(__file__)
 if FILE not in sys.path:
@@ -18,6 +19,7 @@ if FILE not in sys.path:
 
 from simple_planner import Planner
 from model import Point, Vessel, SusTarget, Target, Area
+from plotpath import plot_path
 
 
 class PathPlanner:
@@ -35,7 +37,9 @@ class PathPlanner:
         self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
         self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
         self.sonar_length_plus = 5
-        self.target_threat_radius_plus = 20
+        self.target_threat_radius_plus = 10
+        self.turn_radius = 30
+        self.degree = 135
         self.initial = self.task_ves_info["content"]["arguments"]["initial"]
 
         # system arguments
@@ -174,15 +178,6 @@ class PathPlanner:
             return True
         return False
 
-    @staticmethod
-    def is_obtuse(A, B, C):
-        v1 = np.array([B.x - A.x, B.y - A.y])
-        v2 = np.array([C.x - A.x, C.y - A.y])
-        cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-        if cos < 0:
-            return True
-        return False
-
     def pass_through_sus_tar_or_obs(self, start_point, end_point):
         for item in self.sustarget_list + self.target_list:
             if self.point_in_area(start_point, item) or self.point_in_area(end_point, item):
@@ -217,7 +212,7 @@ class PathPlanner:
             return True
         return False
 
-    def insert_path_point(self, start_point, end_point, item):
+    def insert_path_point(self, prev_point, start_point, end_point, item):
         # todo: 当两个obs靠的很近的时候，迭代出错
         insert_obs_list = list()
         angle_point_list = [item.ld_angle_extend, item.lu_angle_extend, item.rd_angle_extend, item.ru_angle_extend]
@@ -226,10 +221,13 @@ class PathPlanner:
             if (not self.is_intersec(start_point, angle_point, angle_point_list[0], angle_point_list[3])) and \
                     (not self.is_intersec(start_point, angle_point, angle_point_list[1], angle_point_list[2])) and \
                     (not self.is_intersec(angle_point, end_point, angle_point_list[0], angle_point_list[3])) and \
-                    (not self.is_intersec(angle_point, end_point, angle_point_list[1], angle_point_list[2])):
+                    (not self.is_intersec(angle_point, end_point, angle_point_list[1], angle_point_list[2])) and \
+                    self.is_obtuse(start_point, prev_point, angle_point):
                 return [angle_point]
         else:
+            '''
             if abs(end_point.x - start_point.x) < abs(end_point.y - start_point.y):
+                # 路径竖直穿过障碍
                 if item.pos.x < start_point.x:
                     if start_point.y < end_point.y:
                         insert_obs_list.append(item.rd_angle_extend)
@@ -245,6 +243,7 @@ class PathPlanner:
                         insert_obs_list.append(item.lu_angle_extend)
                         insert_obs_list.append(item.ld_angle_extend)
             else:
+                # 路径水平穿过障碍
                 if item.pos.y < start_point.y:
                     if start_point.x < end_point.x:
                         insert_obs_list.append(item.lu_angle_extend)
@@ -259,7 +258,122 @@ class PathPlanner:
                     else:
                         insert_obs_list.append(item.rd_angle_extend)
                         insert_obs_list.append(item.ld_angle_extend)
+            '''
+            _angle_point_list = angle_point_list.copy()
+            _prev_point = prev_point
+            out_flag = False
+            while not out_flag:
+                for index in range(len(_angle_point_list)):
+                    point = _angle_point_list[index]
+                    if self.is_obtuse(start_point, _prev_point, point) and (
+                            not self.is_intersec(start_point, point, angle_point_list[0], angle_point_list[3])) and \
+                            (not self.is_intersec(start_point, point, angle_point_list[1],
+                                                  angle_point_list[2])):
+                        insert_obs_list.append(point)
+                        _prev_point = start_point
+                        start_point = point
+                        _angle_point_list.pop(index)
+                        break
+                if self.is_obtuse(start_point, _prev_point, end_point) and (
+                        not self.is_intersec(start_point, end_point, angle_point_list[0], angle_point_list[3])) and \
+                        (not self.is_intersec(start_point, end_point, angle_point_list[1],
+                                              angle_point_list[2])):
+                    out_flag = True
+                # time.sleep(10)
         return insert_obs_list
+
+    def insert_acute_path_point(self, point1, point2, point3, option):
+        insert_point_list = list()
+        if option == 'behind_point2':
+            _lambda = (point1.x - point2.x) * (point3.x - point2.x) + (point1.y - point2.y) * (point3.y - point2.y) / (
+                    (point1.x - point2.x) ** 2 + (point1.y - point2.y) ** 2)
+            H = point2 + Point([_lambda * (point1 - point2).x, _lambda * (point1 - point2).y])
+            vec1 = point3 - H  # HP3
+            # vec_len = np.linalg.norm([vec1.x, vec1.y])
+            # norm_vec = Point([vec1.x / vec_len, vec1.y / vec_len])
+            angle = math.atan2(vec1.y, vec1.x) * 180 / math.pi
+            vec2 = point2 - point1  # P1P2
+            sign = np.sign(vec2.x * vec1.y - vec2.y * vec1.x)  # P1P2 cross HP3
+            direction = math.atan2(vec2.y, vec2.x) * 180 / math.pi
+            circle_sample = list()
+            prev_point = point2
+            step = 30
+            length = np.sqrt(2 * self.turn_radius ** 2 - 2 * (self.turn_radius ** 2) * np.cos(step * np.pi / 180))
+            for deg in range(step, 180, step):
+                _direction = 90 - direction - sign * deg
+                circle_sample.append(Point([
+                    self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lon2"],
+                    self.geod.Direct(prev_point.y, prev_point.x, _direction, length)["lat2"]
+                ]))
+                prev_point = circle_sample[-1]
+            #
+            # x, y = [p.x for p in circle_sample], [p.y for p in circle_sample]
+            # x = [point1.x, point2.x] + x
+            # y = [point1.y, point2.y] + y
+            # plt.plot(x, y)
+            # plt.show()
+            prev_point = point1
+            start_point = point2
+            end_point = point3
+            flag = False
+            while not flag:
+                try:
+                    sample_point = circle_sample.pop(0)
+                except IndexError:
+                    print("Error! run out of sample!")
+                for tar in self.target_list:
+                    if self.point_in_area(sample_point, tar):
+                        print("path in target area, return.")
+                        flag = True
+                        break
+                if not flag:
+                    if not self.is_large_than_degree(sample_point, start_point, end_point):
+                        insert_point_list.append(sample_point)
+                        start_point = sample_point
+                    else:
+                        insert_point_list.append(sample_point)
+                        return insert_point_list
+                else:
+                    return self.insert_path_point(point1, point2, point3, tar)
+        else:
+            pass
+
+    @staticmethod
+    def is_obtuse(A, B, C):
+        v1 = np.array([B.x - A.x, B.y - A.y])
+        v2 = np.array([C.x - A.x, C.y - A.y])
+        cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        if cos < 0:
+            return True
+        return False
+
+    def is_large_than_degree(self, A, B, C):
+        v1 = np.array([B.x - A.x, B.y - A.y])
+        v2 = np.array([C.x - A.x, C.y - A.y])
+        cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+        if cos < np.cos(self.degree * np.pi / 180):
+            return True
+        return False
+
+    def acute2obtuse(self, prev_point, out_point_list):
+        path_list = [prev_point] + out_point_list  # 4
+        _path_list = path_list
+        for index in range(len(path_list) - 2):
+            point1 = path_list[index]
+            point2 = path_list[index + 1]
+            point3 = path_list[index + 2]
+            if not self.is_obtuse(point2, point1, point3):
+                if index == 0:
+                    insert_point = self.insert_acute_path_point(point1, point2, point3, "behind_point2")
+                    ip = _path_list.index(point2)
+                    _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
+                elif index == len(path_list) - 3:
+                    insert_point = self.insert_acute_path_point(point1, point2, point3, "before_point2")
+                    ip = _path_list.index(point1)
+                    _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
+                else:
+                    print("acute appear in middle path!!")
+        return _path_list[1:]
 
     def find_next_point(self, prev_point, start_point, next_area):
         out_point_list = list()
@@ -273,11 +387,11 @@ class PathPlanner:
             # 1  2     3  4
             # 沿着东西方向的航路
             x, y = next_area.ld_angle.x, next_area.ld_angle.y
-            # Direct中lattitude的取值范围为0-90，因此-90防止越界
-            length_geo = self.geod.Direct(x - 90, y, 90, self.dead_zone_width / 2)
-            sonar_length_geo = self.geod.Direct(x - 90, y, 0, self.sonar_length)
-            length = length_geo["lon2"] - y
-            sonar_length = sonar_length_geo["lat2"] + 90 - x
+
+            length_geo = self.geod.Direct(y, x, 0, self.dead_zone_width / 2)
+            sonar_length_geo = self.geod.Direct(y, x, 90, self.sonar_length + self.sonar_length_plus)
+            length = length_geo["lat2"] - y
+            sonar_length = sonar_length_geo["lon2"] - x
             p1 = next_area.ld_angle - Point([sonar_length, length])
             p2 = next_area.ld_angle - Point([0, length])
             p3 = next_area.rd_angle - Point([0, length])
@@ -298,10 +412,10 @@ class PathPlanner:
             # 3  -------  7
             # 4           8
             x, y = next_area.ld_angle.x, next_area.ld_angle.y
-            width_geo = self.geod.Direct(x - 90, y, 0, self.dead_zone_width / 2)
-            sonar_length_geo = self.geod.Direct(x - 90, y, 90, self.sonar_length)
-            width = width_geo["lat2"] + 90 - x
-            sonar_length = sonar_length_geo["lon2"] - y
+            width_geo = self.geod.Direct(y, x, 90, self.dead_zone_width / 2)
+            sonar_length_geo = self.geod.Direct(y, x, 0, self.sonar_length + self.sonar_length_plus)
+            width = width_geo["lon2"] - x
+            sonar_length = sonar_length_geo["lat2"] - y
             p1 = next_area.lu_angle - Point([width, -sonar_length])
             p2 = next_area.lu_angle - Point([width, 0])
             p3 = next_area.ld_angle - Point([width, 0])
@@ -329,35 +443,26 @@ class PathPlanner:
                 if not item_flag:
                     out_flag = True
 
-            if out_flag:
-                perform_list = [p for p in perform_list if p[1] == False]
-                perform_list.sort(key=lambda x: x[2])
-                candi = perform_list[0][0]
-                out_point_list = [start_point] + candi
-
-                return out_point_list[-1]
             perform_list.sort(key=lambda x: x[2])
             candi, item = perform_list[0][0], perform_list[0][-1]
             out_point_list = [start_point] + candi
-
+            out_point_list = self.acute2obtuse(prev_point, out_point_list)
             while not out_flag:
                 p1, p2, item, item_flag = self.path_success(out_point_list)
                 if not item_flag:
                     out_flag = True
                 else:
                     index = out_point_list.index(p1)
-                    insert_obs_point_list = self.insert_path_point(p1, p2, item)
+                    insert_obs_point_list = self.insert_path_point(prev_point, p1, p2, item)
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
         return out_point_list[1:]
 
     def remake_assignment_list(self, assignment_list):
         sorted_assignment_list = list()
-        # print("old", assignment_list)
         for assignment in assignment_list:
             y_list = [self.sustarget_list[int(x)].center.y for x in assignment]
             y_list, assignment = zip(*sorted(zip(y_list, assignment)))
             sorted_assignment_list.append(assignment)
-        # print("sorted", sorted_assignment_list)
 
         # 四个船路径不交错
         # 枚举
@@ -410,24 +515,25 @@ class PathPlanner:
 
             first_area_info = self.susTargetInfo[int(task_points[0])]
             void_point = Point([start_point.x - 0.00001, start_point.y])
-            first_area = SusTarget(first_area_info["susTargetId"], first_area_info["susTargetArea"], self.dead_zone_width)
+            first_area = SusTarget(first_area_info["susTargetId"], first_area_info["susTargetArea"],
+                                   self.dead_zone_width)
 
             out_path = self.find_next_point(void_point, start_point, first_area)
 
             for index in range(len(out_path)):
                 point = out_path[index]
-                dist = self.geod.Inverse(point.x - 90, point.y, start_point.x - 90, start_point.y)["s12"]
+                dist = self.geod.Inverse(point.y, point.x, start_point.y, start_point.x)["s12"]
                 if index == 0:
                     vec = point - start_point
                     angle = math.atan2(vec.y, vec.x) * 180 / math.pi
-                    start_point_dis_geo = self.geod.Direct(start_point.x - 90, start_point.y, angle, self.start_point_dis)
+                    start_point_dis_geo = self.geod.Direct(start_point.y, start_point.x, 90 - angle,
+                                                           self.start_point_dis)
                     path_point = {
-                        "coord": [start_point_dis_geo["lat2"] + 90, start_point_dis_geo["lon2"]],
+                        "coord": [start_point_dis_geo["lon2"], start_point_dis_geo["lat2"]],
                         "spd": self.search_spd
                     }
                     path_point_list.append(path_point)
                 time_cost += dist / (0.514444 * self.search_spd)
-                # print(time_cost)
                 start_point = point
                 path_point = {
                     "coord": [point.x, point.y],
@@ -450,7 +556,7 @@ class PathPlanner:
                 out_path = self.find_next_point(prev_point, start_point, next_area)
                 for index in range(len(out_path)):
                     point = out_path[index]
-                    dist = self.geod.Inverse(point.x - 90, point.y, start_point.x - 90, start_point.y)["s12"]
+                    dist = self.geod.Inverse(point.y, point.x, start_point.y, start_point.x)["s12"]
                     time_cost += dist / (0.514444 * self.search_spd)
                     start_point = point
                     path_point = {
@@ -497,15 +603,28 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    # path = "./input.json"
-    path = "input/input_test7.json"
+    input_path = "input/input_test7.json"
+    output_path = "output.json"
 
-    with open(path, 'r', encoding="utf8") as f:
+    with open(input_path, 'r', encoding="utf8") as f:
         task_ves_info = json.load(f)
 
     pathPlan = PathPlanner(task_ves_info)
     ves_dict_info = pathPlan.path_plan()
 
     json_str = json.dumps(ves_dict_info, indent=4)
-    with open("output.json", 'w') as f:
+    with open(output_path, 'w') as f:
         f.write(json_str)
+
+    plot_path(input_path, output_path)
+
+    # p1 = Point([121.01000, 22.00800])
+    # p2 = Point([121.01000, 22.00900])
+    # p3 = Point([121.01100, 22.00900])
+    #
+    # with open(input_path, 'r', encoding="utf8") as f:
+    #     task_ves_info = json.load(f)
+    #
+    # pathPlan = PathPlanner(task_ves_info)
+    #
+    # pathPlan.insert_acute_path_point(p2, p3, p1, 'behind_point2')

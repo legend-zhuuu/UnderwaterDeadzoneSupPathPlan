@@ -6,11 +6,12 @@ from model import SusTarget
 
 COLOR_BAR = ["red", "blue", "green", "yellow"]
 
-if __name__ == "__main__":
-    with open("input/input_test7.json", "r", encoding='utf8') as f:
+
+def plot_path(input_path, output_path):
+    with open(input_path, "r", encoding='utf8') as f:
         task_dict_info = json.load(f)
 
-    with open("./output.json", 'r', encoding='utf8') as f:
+    with open(output_path, 'r', encoding='utf8') as f:
         ves_dict_info = json.load(f)
 
     fig = plt.figure()
@@ -46,3 +47,7 @@ if __name__ == "__main__":
                         height=(sus_tar.lu_angle.y - sus_tar.ld_angle.y))
         ax.add_patch(rec)
     plt.show()
+
+
+if __name__ == "__main__":
+    plot_path(input_path="input/input_test7.json", output_path="output.json")
