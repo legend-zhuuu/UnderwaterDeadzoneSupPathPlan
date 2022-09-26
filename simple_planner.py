@@ -27,7 +27,7 @@ class Planner:
         assignment_list_temp = list()
         X = task_state
         # 定义模型
-        model = AgglomerativeClustering(n_clusters=self.agent_number)
+        model = AgglomerativeClustering(n_clusters=min(self.agent_number, len(self.sus_target_list)))
         # 模型拟合与聚类预测
         yhat = model.fit_predict(X)
         # 检索唯一群集

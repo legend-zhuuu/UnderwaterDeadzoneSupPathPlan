@@ -33,6 +33,7 @@ class PathPlanner:
 
         self.target_threat_radius = self.task_ves_info["content"]["arguments"]["config"]["targetThreatRadius"]
         self.dead_zone_width = self.task_ves_info["content"]["arguments"]["config"]["deadZoneWidth"]
+        self.dead_zone_width += 5
         self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
         self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
         self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
@@ -220,8 +221,9 @@ class PathPlanner:
         item_list = list()
         pos = item.pos
         for tar in self.target_list:
-            if np.linalg.norm([pos.x - tar.pos.x, pos.y - tar.pos.y]) < 2 * (
-                    self.target_threat_radius + self.target_threat_radius_plus) and tar != item:
+            dist = np.linalg.norm([pos.x - tar.pos.x, pos.y - tar.pos.y])
+            e = 2 * (self.target_threat_radius + self.target_threat_radius_plus) / 111000
+            if dist < e:
                 item_list.append(tar)
         return item_list
 
@@ -361,10 +363,10 @@ class PathPlanner:
                     insert_point = self.insert_acute_path_point(point1, point2, point3)
                     ip = _path_list.index(point2)
                     _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
-                elif index == len(path_list) - 3:
+                elif index == len(path_list) - 3:  # index = 1
                     insert_point = self.insert_acute_path_point(point3, point2, point1)
                     insert_point = insert_point[::-1]
-                    ip = _path_list.index(point1)
+                    ip = _path_list.index(_path_list[-3])
                     _path_list = _path_list[:ip + 1] + insert_point + _path_list[ip + 1:]
                 else:
                     print("acute appear in middle path!!")
@@ -448,8 +450,9 @@ class PathPlanner:
                     out_flag = True
                 else:
                     index = out_point_list.index(p1)
-                    item_list = self.charge_item_neighbor(item)
-                    item = self.merge_item_list(item_list)
+                    if getattr(getattr(item, '__class__'), "__name__") == "Target":
+                        item_list = self.charge_item_neighbor(item)
+                        item = self.merge_item_list(item_list)
                     insert_obs_point_list = self.insert_path_point(_prev_point, p1, p2, item)
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
         return out_point_list[1:]
@@ -468,7 +471,7 @@ class PathPlanner:
         ves_start_point = [ves.pos for ves in self.vessel_list]
 
         for p in permutations(sorted_assignment_list):
-            _ves_start_point = ves_start_point.copy()
+            _ves_start_point = ves_start_point.copy()[:len(assignment_list)]
             p = list(p)
             # four first point of task areas
             _task_start_point = [self.sustarget_list[int(assignment[0])].center for assignment in p]
@@ -600,7 +603,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test6.json"
+    input_path = "input/input_test7.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:

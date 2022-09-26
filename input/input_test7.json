@@ -50,8 +50,8 @@
         {
           "targetId": 1004,
           "targetPos": [
-            121.01000000,
-            22.00500000
+            121.02100000,
+            22.00760000
           ]
         }
       ],
@@ -322,7 +322,7 @@
       ],
       "config": {
         "targetThreatRadius": 70,
-        "deadZoneWidth": 30,
+        "deadZoneWidth": 50,
         "startPointdis": 50,
         "speed": 5,
         "sonarLength": 50
