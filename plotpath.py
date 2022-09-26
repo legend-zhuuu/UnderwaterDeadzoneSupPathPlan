@@ -20,20 +20,24 @@ def plot_path(input_path, output_path):
 
     status_info = ves_dict_info["content"]["arguments"]["statusInfo"]
     ves_info = ves_dict_info["content"]["arguments"]["vesInfo"]
+    start_pos_info = task_dict_info["content"]["arguments"]["vesInfo"]
     target_info = task_dict_info["content"]["arguments"]["targetInfo"]
     sus_target_info = task_dict_info["content"]["arguments"]["susTargetInfo"]
     target_thread_radius = task_dict_info["content"]["arguments"]["config"]["targetThreatRadius"]
     dead_zone_width = task_dict_info["content"]["arguments"]["config"]["deadZoneWidth"]
 
-    for ves_i in ves_info:
+    for i in range(len(ves_info)):
+        ves_i = ves_info[i]
         ves_id = ves_i["tid"]
         ves_path = ves_i["path"]["points"]
         ves_start_pos = ves_path[0]["coord"]
-        cir = Circle(xy=ves_start_pos, radius=20 / 111000)
-        ax.add_patch(cir)
         ax.text(ves_start_pos[0], ves_start_pos[1], ves_id)
         x = list()
         y = list()
+        x.append(start_pos_info[i]["vesPos"][0])
+        y.append(start_pos_info[i]["vesPos"][1])
+        cir = Circle(xy=start_pos_info[i]["vesPos"], radius=20 / 111000)
+        ax.add_patch(cir)
         for point in ves_path:
             x.append(point["coord"][0])
             y.append(point["coord"][1])

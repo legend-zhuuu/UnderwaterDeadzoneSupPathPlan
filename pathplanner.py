@@ -99,6 +99,12 @@ class PathPlanner:
     def print_item(self, item):
         print(getattr(item, "__class__"), item.ld_angle_extend.x, item.ld_angle_extend.y)
 
+    def print_points_list(self, points_list):
+        i = 0
+        for point in points_list:
+            print(i, point.x, point.y)
+            i += 1
+
     def input_valid(self, sus_target_list):
         sus_target_list_copy = sus_target_list.copy()
         while sus_target_list_copy:
@@ -514,25 +520,25 @@ class PathPlanner:
             start_point = ves_start_pos
 
             first_area_info = self.susTargetInfo[int(task_points[0])]
-            void_point = Point([start_point.x - 0.00001, start_point.y])
             first_area = SusTarget(first_area_info["susTargetId"], first_area_info["susTargetArea"],
                                    self.dead_zone_width)
 
-            out_path = self.find_next_point(void_point, start_point, first_area)
+            vec = first_area.pos - start_point
+            angle = math.atan2(vec.y, vec.x) * 180 / math.pi
+            start_point_dis_geo = self.geod.Direct(start_point.y, start_point.x, 90 - angle,
+                                                   self.start_point_dis)
+            start_point_dis = Point([start_point_dis_geo["lon2"], start_point_dis_geo["lat2"]])
+            path_point = {
+                "coord": [start_point_dis.x, start_point_dis.y],
+                "spd": self.search_spd
+            }
+            path_point_list.append(path_point)
+
+            out_path = self.find_next_point(start_point, start_point_dis, first_area)
 
             for index in range(len(out_path)):
                 point = out_path[index]
                 dist = self.geod.Inverse(point.y, point.x, start_point.y, start_point.x)["s12"]
-                if index == 0:
-                    vec = point - start_point
-                    angle = math.atan2(vec.y, vec.x) * 180 / math.pi
-                    start_point_dis_geo = self.geod.Direct(start_point.y, start_point.x, 90 - angle,
-                                                           self.start_point_dis)
-                    path_point = {
-                        "coord": [start_point_dis_geo["lon2"], start_point_dis_geo["lat2"]],
-                        "spd": self.search_spd
-                    }
-                    path_point_list.append(path_point)
                 time_cost += dist / (0.514444 * self.search_spd)
                 start_point = point
                 path_point = {
