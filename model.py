@@ -15,11 +15,10 @@ class Point:
 
 
 class Vessel:
-    def __init__(self, tid: str, ves_pos: list, sonar_width: float, spd: float):
+    def __init__(self, tid: str, ves_pos: list, sonar_width: float):
         self.tid = tid
         self.pos = Point(np.array(ves_pos))
         self.sonarWidth = sonar_width
-        self.spd = spd
 
 
 class Area:

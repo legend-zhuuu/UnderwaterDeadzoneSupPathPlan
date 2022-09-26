@@ -93,7 +93,7 @@ class PathPlanner:
     def load_ves_info(self):
         self.vesInfo = self.task_ves_info["content"]["arguments"]["vesInfo"]
         for ves_info in self.vesInfo:
-            vessel = Vessel(ves_info["tid"], ves_info["vesPos"], ves_info["sonarWidth"], ves_info["speed"])
+            vessel = Vessel(ves_info["tid"], ves_info["vesPos"], ves_info["sonarWidth"])
             self.vessel_list.append(vessel)
 
     def print_item(self, item):

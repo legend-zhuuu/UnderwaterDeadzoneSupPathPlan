@@ -134,26 +134,22 @@
                 {
                     "tid": "03AF0101",
                     "vesPos": [121.03000000, 22.01000000],
-                    "sonarWidth":120,
-                    "speed": 10
+                    "sonarWidth":120
                 },
                 {
                     "tid": "03AF0102",
                     "vesPos": [121.03200000, 22.01000000],
-                    "sonarWidth":120,
-                    "speed": 10
+                    "sonarWidth":120
                 },
                 {
                     "tid": "03AF0103",
                     "vesPos": [121.03200000, 22.01200000],
-                    "sonarWidth":120,
-                    "speed": 10
+                    "sonarWidth":120
                 },
                 {
                     "tid": "03AF0104",
                     "vesPos": [121.03000000, 22.01200000],
-                    "sonarWidth":120,
-                    "speed": 10
+                    "sonarWidth":120
                 }
             ],
             "config": {
