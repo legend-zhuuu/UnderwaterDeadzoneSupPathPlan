@@ -216,8 +216,34 @@ class PathPlanner:
             return True
         return False
 
+    def charge_item_neighbor(self, item):
+        item_list = list()
+        pos = item.pos
+        for tar in self.target_list:
+            if np.linalg.norm([pos.x - tar.pos.x, pos.y - tar.pos.y]) < 2 * (
+                    self.target_threat_radius + self.target_threat_radius_plus) and tar != item:
+                item_list.append(tar)
+        return item_list
+
+    def merge_item_list(self, item_list):
+        x_min = item_list[0].ld_angle_extend.x
+        x_max = item_list[0].ru_angle_extend.x
+        y_min = item_list[0].ld_angle_extend.y
+        y_max = item_list[0].ru_angle_extend.y
+        for item in item_list:
+            if item.ld_angle_extend.x < x_min:
+                x_min = item.ld_angle_extend.x
+            if item.ld_angle_extend.y < y_min:
+                y_min = item.ld_angle_extend.y
+            if item.ru_angle_extend.x > x_max:
+                x_max = item.ru_angle_extend.x
+            if item.ru_angle_extend.y > y_max:
+                y_max = item.ru_angle_extend.y
+        new_sus_area = SusTarget("-1", [
+            [x_min, y_max], [x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]], self.dead_zone_width)
+        return new_sus_area
+
     def insert_path_point(self, prev_point, start_point, end_point, item):
-        # todo: 当两个obs靠的很近的时候，迭代出错
         insert_obs_list = list()
         angle_point_list = [item.ld_angle_extend, item.lu_angle_extend, item.rd_angle_extend, item.ru_angle_extend]
 
@@ -229,40 +255,6 @@ class PathPlanner:
                     self.is_obtuse(start_point, prev_point, angle_point):
                 return [angle_point]
         else:
-            '''
-            if abs(end_point.x - start_point.x) < abs(end_point.y - start_point.y):
-                # 路径竖直穿过障碍
-                if item.pos.x < start_point.x:
-                    if start_point.y < end_point.y:
-                        insert_obs_list.append(item.rd_angle_extend)
-                        insert_obs_list.append(item.ru_angle_extend)
-                    else:
-                        insert_obs_list.append(item.ru_angle_extend)
-                        insert_obs_list.append(item.rd_angle_extend)
-                else:
-                    if start_point.y < end_point.y:
-                        insert_obs_list.append(item.ld_angle_extend)
-                        insert_obs_list.append(item.lu_angle_extend)
-                    else:
-                        insert_obs_list.append(item.lu_angle_extend)
-                        insert_obs_list.append(item.ld_angle_extend)
-            else:
-                # 路径水平穿过障碍
-                if item.pos.y < start_point.y:
-                    if start_point.x < end_point.x:
-                        insert_obs_list.append(item.lu_angle_extend)
-                        insert_obs_list.append(item.ru_angle_extend)
-                    else:
-                        insert_obs_list.append(item.ru_angle_extend)
-                        insert_obs_list.append(item.lu_angle_extend)
-                else:
-                    if start_point.x < end_point.x:
-                        insert_obs_list.append(item.ld_angle_extend)
-                        insert_obs_list.append(item.rd_angle_extend)
-                    else:
-                        insert_obs_list.append(item.rd_angle_extend)
-                        insert_obs_list.append(item.ld_angle_extend)
-            '''
             _angle_point_list = angle_point_list.copy()
             _prev_point = prev_point
             out_flag = False
@@ -326,7 +318,7 @@ class PathPlanner:
             except IndexError:
                 print("Error! run out of sample!")
             for tar in self.target_list:
-                if self.point_in_area(sample_point, tar):  # todo: in sus area
+                if self.point_in_area(sample_point, tar):  # todo: in sus area?
                     print("path in target area, return.")
                     flag = True
                     break
@@ -456,6 +448,8 @@ class PathPlanner:
                     out_flag = True
                 else:
                     index = out_point_list.index(p1)
+                    item_list = self.charge_item_neighbor(item)
+                    item = self.merge_item_list(item_list)
                     insert_obs_point_list = self.insert_path_point(_prev_point, p1, p2, item)
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
         return out_point_list[1:]
