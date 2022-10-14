@@ -251,6 +251,8 @@ class PathPlanner:
         return item_list
 
     def merge_item_list(self, item_list):
+        if len(item_list) == 1:
+            return item_list[0]
         x_min = item_list[0].ld_angle_extend.x
         x_max = item_list[0].ru_angle_extend.x
         y_min = item_list[0].ld_angle_extend.y
@@ -264,8 +266,9 @@ class PathPlanner:
                 x_max = item.ru_angle_extend.x
             if item.ru_angle_extend.y > y_max:
                 y_max = item.ru_angle_extend.y
-        new_sus_area = SusTarget("-1", [
-            [x_min, y_max], [x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]], self.dead_zone_width)
+        name = ' '
+        new_sus_area = SusTarget(name.join([str(item.id) for item in item_list]), [
+            [x_min, y_max], [x_min, y_min], [x_max, y_min], [x_max, y_max], [x_min, y_max]], 0)
         return new_sus_area
 
     def insert_path_point(self, prev_point, start_point, end_point, item):
@@ -346,7 +349,7 @@ class PathPlanner:
                 flag = True
             for tar in self.target_list:
                 if self.point_in_area(sample_point, tar):  # todo: in sus area?
-                    print("path in target area, try avoid it.")
+                    print("path in target area, try to avoid it.")
                     flag = True
                     break
             if not flag:

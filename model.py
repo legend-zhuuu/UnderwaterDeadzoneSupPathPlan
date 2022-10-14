@@ -55,7 +55,7 @@ class SusTarget(Area):
         super().__init__(sus_target_area)
         self.id = sus_target_id
         self.type = self.judge_type()
-        self.dead_zone_width = 10
+        self.dead_zone_width = dead_zone_width / 2
         self.plus = 10
         self.ld_angle_extend = None
         self.lu_angle_extend = None
