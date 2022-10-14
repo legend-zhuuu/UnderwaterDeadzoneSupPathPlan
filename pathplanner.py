@@ -66,6 +66,9 @@ class PathPlanner:
         # self.print_item(self.target_list[0])
         # self.print_item(self.sustarget_list[0])
 
+        # output
+        self.ves_dict = dict()
+
         # geographiclib
         self.geod = Geodesic.WGS84
         self.geod = Geodesic(6378388, 1 / 297.0)
@@ -87,6 +90,7 @@ class PathPlanner:
             self.sustarget_list.append(sus_target)
         if not self.input_valid(self.sustarget_list):
             self.system_state["inputState"] = 1
+            self.system_state["workState"] = False
             print("input_error!")
             self.work_state = False
 
@@ -109,6 +113,8 @@ class PathPlanner:
         sus_target_list_copy = sus_target_list.copy()
         while sus_target_list_copy:
             _sus_target = sus_target_list_copy.pop()
+            if not self.point_in_area(_sus_target.ld_angle, self.task_area) or not self.point_in_area(_sus_target.ru_angle, self.task_area):
+                return False
             _center = _sus_target.center
             for sus_target in sus_target_list_copy:
                 center = sus_target.center
@@ -118,8 +124,15 @@ class PathPlanner:
         return True
 
     def empty_ves_dict(self):
-        # todo
-        pass
+        self.ves_dict = dict()
+        self.ves_dict.update({"id": 1})
+        self.ves_dict.update({"method": "notice-event"})
+        arguments = dict()
+        arguments.update({"statusInfo": self.system_state})
+        arguments.update({"jqtime": 0})
+        arguments.update({"vesInfo": []})
+        content = {"arguments": arguments}
+        self.ves_dict.update({"content": content})
 
     @staticmethod
     def set_seed(seed_value):
@@ -181,16 +194,20 @@ class PathPlanner:
 
     @staticmethod
     def point_in_area(point, area):
-        if area.ld_angle.x < point.x < area.rd_angle.x and area.ld_angle.y < point.y < area.lu_angle.y:
-            return True
+        if getattr(getattr(area, '__class__'), "__name__") == "Area":
+            if area.ld_angle.x < point.x < area.rd_angle.x and area.ld_angle.y < point.y < area.lu_angle.y:
+                return True
+        else:
+            if area.ld_angle_extend.x < point.x < area.rd_angle_extend.x and area.ld_angle_extend.y < point.y < area.lu_angle_extend.y:
+                return True
         return False
 
     def pass_through_sus_tar_or_obs(self, start_point, end_point):
         for item in self.sustarget_list + self.target_list:
             if self.point_in_area(start_point, item) or self.point_in_area(end_point, item):
                 return item, True
-            if self.is_intersec(item.ld_angle, item.ru_angle, start_point, end_point) or \
-                    self.is_intersec(item.lu_angle, item.rd_angle, start_point, end_point):
+            if self.is_intersec(item.ld_angle_extend, item.ru_angle_extend, start_point, end_point) or \
+                    self.is_intersec(item.lu_angle_extend, item.rd_angle_extend, start_point, end_point):
                 return item, True
         return [], False
 
@@ -260,7 +277,8 @@ class PathPlanner:
                     (not self.is_intersec(start_point, angle_point, angle_point_list[1], angle_point_list[2])) and \
                     (not self.is_intersec(angle_point, end_point, angle_point_list[0], angle_point_list[3])) and \
                     (not self.is_intersec(angle_point, end_point, angle_point_list[1], angle_point_list[2])) and \
-                    self.is_obtuse(start_point, prev_point, angle_point):
+                    self.is_obtuse(start_point, prev_point, angle_point) and \
+                    self.is_obtuse(angle_point, start_point, end_point):
                 return [angle_point]
         else:
             _angle_point_list = angle_point_list.copy()
@@ -325,9 +343,10 @@ class PathPlanner:
                 sample_point = circle_sample.pop(0)
             except IndexError:
                 print("Error! run out of sample!")
+                flag = True
             for tar in self.target_list:
                 if self.point_in_area(sample_point, tar):  # todo: in sus area?
-                    print("path in target area, return.")
+                    print("path in target area, try avoid it.")
                     flag = True
                     break
             if not flag:
@@ -345,7 +364,7 @@ class PathPlanner:
         v1 = np.array([B.x - A.x, B.y - A.y])
         v2 = np.array([C.x - A.x, C.y - A.y])
         cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-        if cos < 0:
+        if cos < 1e-3:
             return True
         return False
 
@@ -433,8 +452,12 @@ class PathPlanner:
                     candi_point_list.append(_candi_pair)
 
         if len(candi_point_list) == 0:
+            self.work_state = False
+            self.system_state["workState"] = False
+            self.system_state["outputState"] = False
             self.empty_ves_dict()
-            print("Path plan error! All paths will hit target!")
+            print("Path plan error! {} doesn't have a feasible path!".format(next_area.id))
+            return None
         else:
             perform_list = list()
             out_flag = False
@@ -502,12 +525,12 @@ class PathPlanner:
         # print(assignment_list)
 
         # output
-        ves_dict = dict()
-        ves_dict.update({"id": 1})
-        ves_dict.update({"method": "notice-event"})
+        self.ves_dict.update({"id": 1})
+        self.ves_dict.update({"method": "notice-event"})
         output = list()
         for i in range(len(assignment_list)):
             time_cost = 0
+            sus_target_id_list = list()
             ves = self.vessel_list[i]
             ves_id = ves.tid
             ves_output_info = dict()
@@ -522,6 +545,7 @@ class PathPlanner:
             first_area_info = self.susTargetInfo[int(task_points[0])]
             first_area = SusTarget(first_area_info["susTargetId"], first_area_info["susTargetArea"],
                                    self.dead_zone_width)
+            sus_target_id_list.append(first_area.id)
 
             vec = first_area.pos - start_point
             angle = math.atan2(vec.y, vec.x) * 180 / math.pi
@@ -535,6 +559,9 @@ class PathPlanner:
             path_point_list.append(path_point)
 
             out_path = self.find_next_point(start_point, start_point_dis, first_area)
+            if not out_path:
+                print("path planer stop work")
+                return self.ves_dict
 
             for index in range(len(out_path)):
                 point = out_path[index]
@@ -557,9 +584,13 @@ class PathPlanner:
                     next_area = SusTarget(self.susTargetInfo[int(task_points[task_number + 1])]["susTargetId"],
                                           self.susTargetInfo[int(task_points[task_number + 1])]["susTargetArea"],
                                           self.dead_zone_width)
+                    sus_target_id_list.append(next_area.id)
                 else:
                     next_area = None
                 out_path = self.find_next_point(prev_point, start_point, next_area)
+                if not out_path:
+                    print("path planer stop work")
+                    return self.ves_dict
                 for index in range(len(out_path)):
                     point = out_path[index]
                     dist = self.geod.Inverse(point.y, point.x, start_point.y, start_point.x)["s12"]
@@ -579,15 +610,16 @@ class PathPlanner:
             self.jqtime = max(time_cost, self.jqtime)
             ves_output_info.update({"path": path_point_dic})
             output.append(deepcopy(ves_output_info))
+            print("{} complete path plan. Search sustarget id:{}".format(ves_id, sus_target_id_list))
 
         arguments = dict()
         arguments.update({"statusInfo": system_state})
         arguments.update({"jqtime": self.jqtime})
         arguments.update({"vesInfo": output})
         content = {"arguments": arguments}
-        ves_dict.update({"content": content})
+        self.ves_dict.update({"content": content})
 
-        return ves_dict
+        return self.ves_dict
 
     def path_plan(self):
         start_time = time.time()
@@ -609,7 +641,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test7.json"
+    input_path = "input/input_test9.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:
@@ -628,7 +660,7 @@ if __name__ == "__main__":
     # p2 = Point([121.01000, 22.00900])
     # p3 = Point([121.01100, 22.00900])
     #
-    # with open(input_path, 'r', encoding="utf8") as f:
+    # with open(input_path, 'r', encoding="utf8") as ky
     #     task_ves_info = json.load(f)
     #
     # pathPlan = PathPlanner(task_ves_info)
