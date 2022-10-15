@@ -28,9 +28,12 @@ def plot_path(input_path, output_path):
         ax.text(target_i["targetPos"][0], target_i["targetPos"][1], target_i["targetId"])
     for sus_target_i in sus_target_info:
         sus_tar = SusTarget(sus_target_i["susTargetId"], sus_target_i["susTargetArea"], dead_zone_width)
+        x = [x[0] for x in sus_target_i["susTargetArea"]]
+        y = [x[1] for x in sus_target_i["susTargetArea"]]
+        ax.fill(x, y, color="black")
         rec = Rectangle(xy=(sus_tar.ld_angle.x, sus_tar.ld_angle.y), width=(sus_tar.rd_angle.x - sus_tar.ld_angle.x),
                         height=(sus_tar.lu_angle.y - sus_tar.ld_angle.y), color="black")
-        ax.add_patch(rec)
+        # ax.add_patch(rec)
         ax.text(sus_tar.center.x, sus_tar.center.y, sus_tar.id)
     for ves in ves_info:
         ves_id = ves["tid"]
@@ -62,4 +65,4 @@ def plot_path(input_path, output_path):
 
 
 if __name__ == "__main__":
-    plot_path(input_path="input/input_test9.json", output_path=None)
+    plot_path(input_path="input/input_test10.json", output_path=None)
