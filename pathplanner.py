@@ -644,7 +644,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test10.json"
+    input_path = "input/input_test12.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:
