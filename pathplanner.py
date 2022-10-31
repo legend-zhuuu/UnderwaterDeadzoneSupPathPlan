@@ -39,7 +39,7 @@ class PathPlanner:
         self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
         self.sonar_length_plus = 5
         self.target_threat_radius_plus = 10
-        self.turn_radius = 30
+        self.turn_radius = 40
         self.degree = 135
         self.initial = self.task_ves_info["content"]["arguments"]["initial"]
 
@@ -644,7 +644,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test12.json"
+    input_path = "input/input_test13.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:
