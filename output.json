@@ -4,58 +4,13 @@
     "content": {
         "arguments": {
             "statusInfo": {
-                "workState": true,
+                "workState": false,
                 "inputState": 0,
-                "outputState": true,
+                "outputState": false,
                 "msg": "ok"
             },
-            "jqtime": 1956.3497096614408,
-            "vesInfo": [
-                {
-                    "tid": "03AF0101",
-                    "time": 1956.3497096614408,
-                    "path": {
-                        "shape": "LineString",
-                        "points": [
-                            {
-                                "coord": [
-                                    120.99887254865624,
-                                    22.013321418706987
-                                ],
-                                "spd": 5
-                            },
-                            {
-                                "coord": [
-                                    121.02325373808193,
-                                    22.00610408076267
-                                ],
-                                "spd": 5
-                            },
-                            {
-                                "coord": [
-                                    121.03925375273457,
-                                    22.003304080524416
-                                ],
-                                "spd": 5
-                            },
-                            {
-                                "coord": [
-                                    121.045,
-                                    22.003158038976945
-                                ],
-                                "spd": 5
-                            },
-                            {
-                                "coord": [
-                                    121.0456420971769,
-                                    22.003158038976945
-                                ],
-                                "spd": 5
-                            }
-                        ]
-                    }
-                }
-            ]
+            "jqtime": 0,
+            "vesInfo": []
         }
     }
 }

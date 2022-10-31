@@ -1,8 +1,7 @@
 import numpy as np
 import math
 import argparse
-import scipy.io as sio
-from datetime import datetime
+
 import os
 import sys
 import importlib
@@ -11,7 +10,9 @@ import json
 from copy import deepcopy
 from itertools import permutations
 from geographiclib.geodesic import Geodesic
-from matplotlib import pyplot as plt
+from utils import is_obtuse, mod2pi, compute_dist
+from APF import APFPlanner
+
 
 FILE = os.path.dirname(__file__)
 if FILE not in sys.path:
@@ -72,6 +73,9 @@ class PathPlanner:
         # geographiclib
         self.geod = Geodesic.WGS84
         self.geod = Geodesic(6378388, 1 / 297.0)
+
+        # AFPplanner
+        self.APFplanner = APFPlanner(self.target_list, self.sustarget_list, spd=self.search_spd, geod=self.geod)
 
     def load_global_info(self):
         self.task_area = Area(self.task_ves_info["content"]["arguments"]["taskArea"])
@@ -202,6 +206,17 @@ class PathPlanner:
                 return True
         return False
 
+    def get_obs_info(self):
+        obs_x = list()
+        obs_y = list()
+        for sus in self.sustarget_list:
+            obs_x.append(sus.pos.x)
+            obs_y.append(sus.pos.y)
+        for tar in self.target_list:
+            obs_x.append(tar.pos.x)
+            obs_y.append(tar.pos.y)
+        return obs_x, obs_y
+
     def pass_through_sus_tar_or_obs(self, start_point, end_point):
         for item in self.sustarget_list + self.target_list:
             if self.point_in_area(start_point, item) or self.point_in_area(end_point, item):
@@ -280,8 +295,8 @@ class PathPlanner:
                     (not self.is_intersec(start_point, angle_point, angle_point_list[1], angle_point_list[2])) and \
                     (not self.is_intersec(angle_point, end_point, angle_point_list[0], angle_point_list[3])) and \
                     (not self.is_intersec(angle_point, end_point, angle_point_list[1], angle_point_list[2])) and \
-                    self.is_obtuse(start_point, prev_point, angle_point) and \
-                    self.is_obtuse(angle_point, start_point, end_point):
+                    is_obtuse(start_point, prev_point, angle_point) and \
+                    is_obtuse(angle_point, start_point, end_point):
                 return [angle_point]
         else:
             _angle_point_list = angle_point_list.copy()
@@ -290,7 +305,7 @@ class PathPlanner:
             while not out_flag:
                 for index in range(len(_angle_point_list)):
                     point = _angle_point_list[index]
-                    if self.is_obtuse(start_point, _prev_point, point) and (
+                    if is_obtuse(start_point, _prev_point, point) and (
                             not self.is_intersec(start_point, point, angle_point_list[0], angle_point_list[3])) and \
                             (not self.is_intersec(start_point, point, angle_point_list[1],
                                                   angle_point_list[2])):
@@ -299,7 +314,7 @@ class PathPlanner:
                         start_point = point
                         _angle_point_list.pop(index)
                         break
-                if self.is_obtuse(start_point, _prev_point, end_point) and (
+                if is_obtuse(start_point, _prev_point, end_point) and (
                         not self.is_intersec(start_point, end_point, angle_point_list[0], angle_point_list[3])) and \
                         (not self.is_intersec(start_point, end_point, angle_point_list[1],
                                               angle_point_list[2])):
@@ -362,15 +377,6 @@ class PathPlanner:
             else:
                 return self.insert_path_point(point1, point2, point3, tar)
 
-    @staticmethod
-    def is_obtuse(A, B, C):
-        v1 = np.array([B.x - A.x, B.y - A.y])
-        v2 = np.array([C.x - A.x, C.y - A.y])
-        cos = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
-        if cos < 1e-3:
-            return True
-        return False
-
     def is_large_than_degree(self, A, B, C):
         v1 = np.array([B.x - A.x, B.y - A.y])
         v2 = np.array([C.x - A.x, C.y - A.y])
@@ -386,7 +392,7 @@ class PathPlanner:
             point1 = path_list[index]
             point2 = path_list[index + 1]
             point3 = path_list[index + 2]
-            if not self.is_obtuse(point2, point1, point3):
+            if not is_obtuse(point2, point1, point3):
                 if index == 0:
                     insert_point = self.insert_acute_path_point(point1, point2, point3)
                     ip = _path_list.index(point2)
@@ -463,7 +469,22 @@ class PathPlanner:
             return None
         else:
             perform_list = list()
-            out_flag = False
+            out_point_list.append(start_point)
+            # out_flag = False
+            end_pos = candi_point_list[0][0]
+            current_pos = start_point
+            current_yaw = np.arctan2((start_point - prev_point).y, (start_point - prev_point).x)
+            flag, path_list = self.APFplanner.get_APF_path(start_point, end_pos, current_yaw)
+            if flag:
+                out_point_list = out_point_list + path_list + [candi_point_list[0][1]]
+            else:
+                self.work_state = False
+                self.system_state["workState"] = False
+                self.system_state["outputState"] = False
+                self.empty_ves_dict()
+                return None
+
+            '''
             for candi in candi_point_list:
                 # candi = point1 + point2
                 item, item_flag = self.pass_through_sus_tar_or_obs(start_point, candi[0])
@@ -487,6 +508,7 @@ class PathPlanner:
                         item = self.merge_item_list(item_list)
                     insert_obs_point_list = self.insert_path_point(_prev_point, p1, p2, item)
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
+            '''
         return out_point_list[1:]
 
     def remake_assignment_list(self, assignment_list):
@@ -525,7 +547,7 @@ class PathPlanner:
 
     def output_json(self, assignment_list, system_state):
         assignment_list = self.remake_assignment_list(assignment_list)
-        # print(assignment_list)
+        print("allocations:", assignment_list)
 
         # output
         self.ves_dict.update({"id": 1})
@@ -644,7 +666,7 @@ class PathPlanner:
 
 
 if __name__ == "__main__":
-    input_path = "input/input_test12.json"
+    input_path = "input/input_test10.json"
     output_path = "output.json"
 
     with open(input_path, 'r', encoding="utf8") as f:

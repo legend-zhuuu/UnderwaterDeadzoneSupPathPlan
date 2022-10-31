@@ -13,6 +13,9 @@ class Point:
     def __sub__(self, other):
         return Point([self.x - other.x, self.y - other.y])
 
+    def print(self):
+        print(self.x, self.y)
+
 
 class Vessel:
     def __init__(self, tid: str, ves_pos: list, sonar_width: float):

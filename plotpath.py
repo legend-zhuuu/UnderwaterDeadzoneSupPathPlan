@@ -65,4 +65,4 @@ def plot_path(input_path, output_path):
 
 
 if __name__ == "__main__":
-    plot_path(input_path="input/input_test12.json", output_path=None)
+    plot_path(input_path="input/input_test14.json", output_path=None)
