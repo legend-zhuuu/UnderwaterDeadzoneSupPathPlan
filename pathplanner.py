@@ -19,7 +19,6 @@ if FILE not in sys.path:
 
 from simple_planner import Planner
 from model import Point, Vessel, SusTarget, Target, Area
-from plotpath import plot_path
 
 
 class PathPlanner:
@@ -27,30 +26,26 @@ class PathPlanner:
         # 导入json文件中的任务和舰艇信息
         self.task_ves_info = task_ves_info
 
-        # information
-        self.target_number = len(self.task_ves_info["content"]["arguments"]["susTargetInfo"])
-        self.agent_number = len(self.task_ves_info["content"]["arguments"]["vesInfo"])
-
-        self.target_threat_radius = self.task_ves_info["content"]["arguments"]["config"]["targetThreatRadius"]
-        self.dead_zone_width = self.task_ves_info["content"]["arguments"]["config"]["deadZoneWidth"]
-        self.dead_zone_width += 5
-        self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
-        self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
-        self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
-        self.sonar_length_plus = 5
-        self.target_threat_radius_plus = 10
-        self.turn_radius = 40
-        self.degree = 135
-        self.initial = self.task_ves_info["content"]["arguments"]["initial"]
-
         # system arguments
-        self.work_state = True
         self.system_state = {
             "workState": True,
             "inputState": 0,
             "outputState": True,
             "msg": "ok"
         }
+
+        # information
+        self.target_number = len(self.task_ves_info["content"]["arguments"]["susTargetInfo"])
+        self.agent_number = len(self.task_ves_info["content"]["arguments"]["vesInfo"])
+
+        self.load_config()
+        self.sonar_length_plus = 5
+        self.dead_zone_width_plus = 5
+        self.dead_zone_width += self.dead_zone_width_plus
+        self.target_threat_radius_plus = 10
+        self.turn_radius = 40
+        self.degree = 135
+        self.initial = self.task_ves_info["content"]["arguments"]["initial"]
 
         self.jqtime = 0
 
@@ -63,8 +58,7 @@ class PathPlanner:
         self.load_targets_pos_info()
         self.load_sus_target_info()
         self.load_ves_info()
-        # self.print_item(self.target_list[0])
-        # self.print_item(self.sustarget_list[0])
+        self.check_input_valid()
 
         # output
         self.ves_dict = dict()
@@ -72,6 +66,19 @@ class PathPlanner:
         # geographiclib
         self.geod = Geodesic.WGS84
         self.geod = Geodesic(6378388, 1 / 297.0)
+
+    def load_config(self):
+        try:
+            self.target_threat_radius = self.task_ves_info["content"]["arguments"]["config"]["targetThreatRadius"]
+            self.dead_zone_width = self.task_ves_info["content"]["arguments"]["config"]["deadZoneWidth"]
+            self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
+            self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
+            self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
+        except KeyError:
+            print("config informations are incomplete")
+            self.system_state["workState"] = False
+            self.system_state["inputState"] = 1
+            self.system_state["outputState"] = False
 
     def load_global_info(self):
         self.task_area = Area(self.task_ves_info["content"]["arguments"]["taskArea"])
@@ -88,11 +95,6 @@ class PathPlanner:
         for sus_tar_info in self.susTargetInfo:
             sus_target = SusTarget(sus_tar_info["susTargetId"], sus_tar_info["susTargetArea"], self.dead_zone_width)
             self.sustarget_list.append(sus_target)
-        if not self.input_valid(self.sustarget_list):
-            self.system_state["inputState"] = 1
-            self.system_state["workState"] = False
-            print("input_error!")
-            self.work_state = False
 
     def load_ves_info(self):
         self.vesInfo = self.task_ves_info["content"]["arguments"]["vesInfo"]
@@ -109,19 +111,66 @@ class PathPlanner:
             print(i, point.x, point.y)
             i += 1
 
-    def input_valid(self, sus_target_list):
-        sus_target_list_copy = sus_target_list.copy()
-        while sus_target_list_copy:
-            _sus_target = sus_target_list_copy.pop()
-            if not self.point_in_area(_sus_target.ld_angle, self.task_area) or not self.point_in_area(_sus_target.ru_angle, self.task_area):
-                return False
-            _center = _sus_target.center
-            for sus_target in sus_target_list_copy:
-                center = sus_target.center
-                if np.abs(center.x - _center.x) < (_sus_target.length / 2 + sus_target.length / 2) \
-                        and np.abs(center.y - _center.y) < (_sus_target.width / 2 + sus_target.width / 2):
-                    return False
-        return True
+    def check_input_valid(self):
+        valid_targetid_input = [800001, 899999]
+        valid_sustargetid_input = [800001, 899999]
+        sonar_range = [0, 450]
+
+        config_range = {
+            "targetThreatRadius": [0, 5000],
+            "deadZoneWidth": [0, 50],
+            "startPointdis": [0, 1000],
+            "speed": [0, 40],
+            "sonarLength": [0, 100],
+        }
+
+        # target
+        for tar in self.target_list:
+            if not valid_targetid_input[0] <= tar.id <= valid_targetid_input[1]:
+                print("targetId input IndexError")
+                self.system_state["inputState"] = 2
+
+        # sustarget
+        if len(self.sustarget_list) == 0:
+            print("The quantity of sus target area is zero")
+            self.system_state["inputState"] = 1
+            self.system_state["outputState"] = False
+            self.system_state["workState"] = False
+            return
+        for sustar in self.sustarget_list:
+            if not self.point_in_area(sustar.ld_angle, self.task_area) or not self.point_in_area(sustar.ru_angle, self.task_area):
+                print("sus target area is invalid")
+                self.system_state["inputState"] = 2
+                self.system_state["outputState"] = False
+                self.system_state["workState"] = False
+                return
+            if not valid_sustargetid_input[0] <= sustar.id <= valid_sustargetid_input[1]:
+                print("susTargetId input IndexError")
+                self.system_state["inputState"] = 2
+
+        # ves
+        if len(self.vessel_list) == 0:
+            print("The quantity of vessel is zero")
+            self.system_state["inputState"] = 1
+            self.system_state["outputState"] = False
+            self.system_state["workState"] = False
+            return
+        for ves in self.vessel_list:
+            if not sonar_range[0] <= ves.sonarWidth <= sonar_range[1]:
+                print("sonar input is invalid")
+                self.system_state["inputState"] = 2
+                self.system_state["outputState"] = False
+                self.system_state["workState"] = False
+                return
+
+        # config input
+        for config_key, config_value in self.task_ves_info["content"]["arguments"]["config"].items():
+            if not config_range[config_key][0] <= config_value <= config_range[config_key][1]:
+                print("{} input is invalid".format(config_key))
+                self.system_state["inputState"] = 2
+                self.system_state["outputState"] = False
+                self.system_state["workState"] = False
+                return
 
     def empty_ves_dict(self):
         self.ves_dict = dict()
@@ -455,7 +504,6 @@ class PathPlanner:
                     candi_point_list.append(_candi_pair)
 
         if len(candi_point_list) == 0:
-            self.work_state = False
             self.system_state["workState"] = False
             self.system_state["outputState"] = False
             self.empty_ves_dict()
@@ -525,13 +573,15 @@ class PathPlanner:
 
     def output_json(self, assignment_list, system_state):
         assignment_list = self.remake_assignment_list(assignment_list)
-        # print(assignment_list)
+        print(assignment_list)
 
         # output
         self.ves_dict.update({"id": 1})
         self.ves_dict.update({"method": "notice-event"})
         output = list()
         for i in range(len(assignment_list)):
+            if not self.system_state["workState"]:
+                break
             time_cost = 0
             sus_target_id_list = list()
             ves = self.vessel_list[i]
@@ -611,7 +661,7 @@ class PathPlanner:
             path_point_dic.update({"points": path_point_list})
             ves_output_info.update({"time": time_cost})
             self.jqtime = max(time_cost, self.jqtime)
-            ves_output_info.update({"path": path_point_dic})
+            ves_output_info.update({"path": [path_point_dic]})
             output.append(deepcopy(ves_output_info))
             print("{} complete path plan. Search sustarget id:{}".format(ves_id, sus_target_id_list))
 
@@ -627,7 +677,7 @@ class PathPlanner:
     def path_plan(self):
         start_time = time.time()
         assignment_list = list()
-        if not self.work_state:
+        if not self.system_state["workState"]:
             ves_dict = self.output_json(assignment_list, self.system_state)
             return ves_dict
 
@@ -641,31 +691,3 @@ class PathPlanner:
         plan_time = end_time - start_time
         print("plan time cost:", plan_time, "s")
         return ves_dict
-
-
-if __name__ == "__main__":
-    input_path = "input/input_test13.json"
-    output_path = "output.json"
-
-    with open(input_path, 'r', encoding="utf8") as f:
-        task_ves_info = json.load(f)
-
-    pathPlan = PathPlanner(task_ves_info)
-    ves_dict_info = pathPlan.path_plan()
-
-    json_str = json.dumps(ves_dict_info, indent=4)
-    with open(output_path, 'w') as f:
-        f.write(json_str)
-
-    plot_path(input_path, output_path)
-
-    # p1 = Point([121.01000, 22.00800])
-    # p2 = Point([121.01000, 22.00900])
-    # p3 = Point([121.01100, 22.00900])
-    #
-    # with open(input_path, 'r', encoding="utf8") as ky
-    #     task_ves_info = json.load(f)
-    #
-    # pathPlan = PathPlanner(task_ves_info)
-    #
-    # pathPlan.insert_acute_path_point(p2, p3, p1, 'behind_point2')

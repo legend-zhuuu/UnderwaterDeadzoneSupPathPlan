@@ -22,7 +22,9 @@ class Planner:
         :return: assignment_list: a list where entry i is an ordered list of the tasks (by number) assigned to robot i. e.g.
             [2,7,5]
         """
-        if len(self.sus_target_list) == 1:
+        if len(self.sus_target_list) == 0:
+            return []
+        elif len(self.sus_target_list) == 1:
             return [(0,)]
         task_state = [(sus_tar.center.x, sus_tar.center.y) for sus_tar in self.sus_target_list]
         assignment_list_temp = list()
