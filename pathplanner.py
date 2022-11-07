@@ -34,15 +34,15 @@ class PathPlanner:
             "msg": "ok"
         }
 
+        self.sonar_length_plus = 5
+        self.dead_zone_width_plus = 5
+        self.target_threat_radius_plus = 10
+
         # information
         self.target_number = len(self.task_ves_info["content"]["arguments"]["susTargetInfo"])
         self.agent_number = len(self.task_ves_info["content"]["arguments"]["vesInfo"])
 
         self.load_config()
-        self.sonar_length_plus = 5
-        self.dead_zone_width_plus = 5
-        self.dead_zone_width += self.dead_zone_width_plus
-        self.target_threat_radius_plus = 10
         self.turn_radius = 40
         self.degree = 135
         self.initial = self.task_ves_info["content"]["arguments"]["initial"]
@@ -54,11 +54,12 @@ class PathPlanner:
         self.vessel_list = list()
 
         # load information
-        self.load_global_info()
-        self.load_targets_pos_info()
-        self.load_sus_target_info()
-        self.load_ves_info()
-        self.check_input_valid()
+        if self.system_state["workState"]:
+            self.load_global_info()
+            self.load_targets_pos_info()
+            self.load_sus_target_info()
+            self.load_ves_info()
+            self.check_input_valid()
 
         # output
         self.ves_dict = dict()
@@ -74,8 +75,9 @@ class PathPlanner:
             self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
             self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
             self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
+            self.dead_zone_width += self.dead_zone_width_plus
         except KeyError:
-            print("config informations are incomplete")
+            self.system_state["msg"] = "config information are incomplete."
             self.system_state["workState"] = False
             self.system_state["inputState"] = 1
             self.system_state["outputState"] = False
@@ -127,37 +129,37 @@ class PathPlanner:
         # target
         for tar in self.target_list:
             if not valid_targetid_input[0] <= tar.id <= valid_targetid_input[1]:
-                print("targetId input IndexError")
+                self.system_state["msg"] = "targetId input is out of range"
                 self.system_state["inputState"] = 2
 
         # sustarget
         if len(self.sustarget_list) == 0:
-            print("The quantity of sus target area is zero")
+            self.system_state["msg"] = "The quantity of sus target area is zero"
             self.system_state["inputState"] = 1
             self.system_state["outputState"] = False
             self.system_state["workState"] = False
             return
         for sustar in self.sustarget_list:
             if not self.point_in_area(sustar.ld_angle, self.task_area) or not self.point_in_area(sustar.ru_angle, self.task_area):
-                print("sus target area is invalid")
+                self.system_state["msg"] = "sus target area is invalid"
                 self.system_state["inputState"] = 2
                 self.system_state["outputState"] = False
                 self.system_state["workState"] = False
                 return
             if not valid_sustargetid_input[0] <= sustar.id <= valid_sustargetid_input[1]:
-                print("susTargetId input IndexError")
+                self.system_state["msg"] = "susTargetId input is out of range"
                 self.system_state["inputState"] = 2
 
         # ves
         if len(self.vessel_list) == 0:
-            print("The quantity of vessel is zero")
+            self.system_state["msg"] = "The quantity of vessel is zero"
             self.system_state["inputState"] = 1
             self.system_state["outputState"] = False
             self.system_state["workState"] = False
             return
         for ves in self.vessel_list:
             if not sonar_range[0] <= ves.sonarWidth <= sonar_range[1]:
-                print("sonar input is invalid")
+                self.system_state["msg"] = "sonar input is out of range"
                 self.system_state["inputState"] = 2
                 self.system_state["outputState"] = False
                 self.system_state["workState"] = False
@@ -166,7 +168,7 @@ class PathPlanner:
         # config input
         for config_key, config_value in self.task_ves_info["content"]["arguments"]["config"].items():
             if not config_range[config_key][0] <= config_value <= config_range[config_key][1]:
-                print("{} input is invalid".format(config_key))
+                self.system_state["msg"] = "{} input is out of range".format(config_key)
                 self.system_state["inputState"] = 2
                 self.system_state["outputState"] = False
                 self.system_state["workState"] = False
@@ -507,7 +509,7 @@ class PathPlanner:
             self.system_state["workState"] = False
             self.system_state["outputState"] = False
             self.empty_ves_dict()
-            print("Path plan error! {} doesn't have a feasible path!".format(next_area.id))
+            self.system_state["msg"] = "Path plan error! {} doesn't have a feasible path!".format(next_area.id)
             return None
         else:
             perform_list = list()
@@ -613,8 +615,10 @@ class PathPlanner:
 
             out_path = self.find_next_point(start_point, start_point_dis, first_area)
             if not out_path:
-                print("path planer stop work")
-                return self.ves_dict
+                self.system_state["msg"] = "{} can't find a feasible path".format(ves_id)
+                self.system_state["outputState"] = False
+                self.system_state["workState"] = False
+                break
 
             for index in range(len(out_path)):
                 point = out_path[index]
@@ -642,8 +646,11 @@ class PathPlanner:
                     next_area = None
                 out_path = self.find_next_point(prev_point, start_point, next_area)
                 if not out_path:
-                    print("path planer stop work")
-                    return self.ves_dict
+                    self.system_state["msg"] = "{} can't find a feasible path".format(ves_id)
+                    self.system_state["outputState"] = False
+                    self.system_state["workState"] = False
+                    break
+
                 for index in range(len(out_path)):
                     point = out_path[index]
                     dist = self.geod.Inverse(point.y, point.x, start_point.y, start_point.x)["s12"]
@@ -667,7 +674,7 @@ class PathPlanner:
 
         arguments = dict()
         arguments.update({"statusInfo": system_state})
-        arguments.update({"jqtime": self.jqtime})
+        arguments.update({"jqTime": self.jqtime})
         arguments.update({"vesInfo": output})
         content = {"arguments": arguments}
         self.ves_dict.update({"content": content})

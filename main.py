@@ -17,4 +17,5 @@ if __name__ == "__main__":
     with open(output_path, 'w') as f:
         f.write(json_str)
 
-    plot_path(input_path, output_path)
+    if ves_dict_info["content"]["arguments"]["statusInfo"]["inputState"] != 1:
+        plot_path(input_path, output_path)

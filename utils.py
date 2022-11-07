@@ -224,5 +224,5 @@ def get_dubins_path(Pi, Pf, alpha, beta, ratio, tp="RSR", show_path=True):
 
 
 if __name__ == "__main__":
-    path_point = get_dubins_path(Pi=(121.0120, 22.01), Pf=(121.0105, 22.01020), alpha=0, beta=-3.14, ratio=0.00005, tp="LSL")
+    path_point = get_dubins_path(Pi=(121.0120, 22.01), Pf=(121.0105, 22.01020), alpha=0, beta=-3.14, ratio=0.00029, tp="LSR")
     print(path_point)
