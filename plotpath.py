@@ -8,16 +8,24 @@ COLOR_BAR = ["red", "blue", "green", "yellow"]
 
 
 def plot_path(input_path, output_path):
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.axis([120.999, 121.06, 21.999, 22.03])
-
     with open(input_path, "r", encoding='utf8') as f:
         task_dict_info = json.load(f)
 
     pathPlanner = PathPlanner(task_dict_info)
     start_pos_info = task_dict_info["content"]["arguments"]["vesInfo"]
     target_thread_radius = task_dict_info["content"]["arguments"]["config"]["targetThreatRadius"]
+
+    task_area = pathPlanner.task_area
+
+    # prepare plot
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.axis([task_area.ld_angle.x - 0.001, task_area.rd_angle.x + 0.001, task_area.ld_angle.y - 0.001, task_area.lu_angle.y + 0.001])
+
+    rec = Rectangle(xy=(task_area.ld_angle.x, task_area.ld_angle.y),
+                    width=(task_area.rd_angle.x - task_area.ld_angle.x),
+                    height=(task_area.lu_angle.y - task_area.ld_angle.y), color='blue', fill=False)
+    ax.add_patch(rec)
 
     target_info = pathPlanner.target_list
     for target_i in target_info:

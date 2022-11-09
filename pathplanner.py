@@ -5,7 +5,7 @@ import scipy.io as sio
 from datetime import datetime
 import os
 import sys
-import importlib
+from utils import compute_dist
 import time
 import json
 from copy import deepcopy
@@ -34,6 +34,10 @@ class PathPlanner:
             "msg": "ok"
         }
 
+        # geographiclib
+        self.geod = Geodesic.WGS84
+        self.geod = Geodesic(6378388, 1 / 297.0)
+
         self.sonar_length_plus = 5
         self.dead_zone_width_plus = 5
         self.target_threat_radius_plus = 10
@@ -42,7 +46,18 @@ class PathPlanner:
         self.target_number = len(self.task_ves_info["content"]["arguments"]["susTargetInfo"])
         self.agent_number = len(self.task_ves_info["content"]["arguments"]["vesInfo"])
 
-        self.load_config()
+        try:
+            self.load_target_threat_radius()
+            self.load_dead_zone_width()
+            self.load_start_point_dis()
+            self.load_search_spd()
+            self.load_sonar_length()
+        except KeyError:
+            self.system_state["msg"] = "{} information are incomplete.".format(self.system_state["msg"])
+            self.system_state["workState"] = False
+            self.system_state["inputState"] = 1
+            self.system_state["outputState"] = False
+
         self.turn_radius = 40
         self.degree = 135
         self.initial = self.task_ves_info["content"]["arguments"]["initial"]
@@ -55,37 +70,47 @@ class PathPlanner:
 
         # load information
         if self.system_state["workState"]:
-            self.load_global_info()
-            self.load_targets_pos_info()
-            self.load_sus_target_info()
-            self.load_ves_info()
-            self.check_input_valid()
-
+            try:
+                self.load_global_info()
+                self.load_targets_pos_info()
+                self.load_sus_target_info()
+                self.load_ves_info()
+                self.check_input_valid()
+            except KeyError:
+                self.system_state["msg"] = "{} information are incomplete.".format(self.system_state["msg"])
+                self.system_state["workState"] = False
+                self.system_state["inputState"] = 1
+                self.system_state["outputState"] = False
         # output
         self.ves_dict = dict()
 
-        # geographiclib
-        self.geod = Geodesic.WGS84
-        self.geod = Geodesic(6378388, 1 / 297.0)
+    def load_target_threat_radius(self):
+        self.system_state["msg"] = "targetThreatRadius"
+        self.target_threat_radius = self.task_ves_info["content"]["arguments"]["config"]["targetThreatRadius"]
 
-    def load_config(self):
-        try:
-            self.target_threat_radius = self.task_ves_info["content"]["arguments"]["config"]["targetThreatRadius"]
-            self.dead_zone_width = self.task_ves_info["content"]["arguments"]["config"]["deadZoneWidth"]
-            self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
-            self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
-            self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
-            self.dead_zone_width += self.dead_zone_width_plus
-        except KeyError:
-            self.system_state["msg"] = "config information are incomplete."
-            self.system_state["workState"] = False
-            self.system_state["inputState"] = 1
-            self.system_state["outputState"] = False
+    def load_dead_zone_width(self):
+        self.system_state["msg"] = "deadZoneWidth"
+        self.dead_zone_width = self.task_ves_info["content"]["arguments"]["config"]["deadZoneWidth"]
+        self.dead_zone_width += self.dead_zone_width_plus
+
+    def load_start_point_dis(self):
+        self.system_state["msg"] = "startPointdis"
+        self.start_point_dis = self.task_ves_info["content"]["arguments"]["config"]["startPointdis"]
+
+    def load_search_spd(self):
+        self.system_state["msg"] = "speed"
+        self.search_spd = self.task_ves_info["content"]["arguments"]["config"]["speed"]
+
+    def load_sonar_length(self):
+        self.system_state["msg"] = "sonarLength"
+        self.sonar_length = self.task_ves_info["content"]["arguments"]["config"]["sonarLength"]
 
     def load_global_info(self):
+        self.system_state["msg"] = "taskArea"
         self.task_area = Area(self.task_ves_info["content"]["arguments"]["taskArea"])
 
     def load_targets_pos_info(self):
+        self.system_state["msg"] = "targetInfo"
         self.targetInfo = self.task_ves_info["content"]["arguments"]["targetInfo"]
         for tar_info in self.targetInfo:
             target = Target(tar_info["targetId"], tar_info["targetPos"], self.target_threat_radius,
@@ -93,25 +118,18 @@ class PathPlanner:
             self.target_list.append(target)
 
     def load_sus_target_info(self):
+        self.system_state["msg"] = "susTargetInfo"
         self.susTargetInfo = self.task_ves_info["content"]["arguments"]["susTargetInfo"]
         for sus_tar_info in self.susTargetInfo:
             sus_target = SusTarget(sus_tar_info["susTargetId"], sus_tar_info["susTargetArea"], self.dead_zone_width)
             self.sustarget_list.append(sus_target)
 
     def load_ves_info(self):
+        self.system_state["msg"] = "vesInfo"
         self.vesInfo = self.task_ves_info["content"]["arguments"]["vesInfo"]
         for ves_info in self.vesInfo:
             vessel = Vessel(ves_info["tid"], ves_info["vesPos"], ves_info["sonarWidth"])
             self.vessel_list.append(vessel)
-
-    def print_item(self, item):
-        print(getattr(item, "__class__"), item.ld_angle_extend.x, item.ld_angle_extend.y)
-
-    def print_points_list(self, points_list):
-        i = 0
-        for point in points_list:
-            print(i, point.x, point.y)
-            i += 1
 
     def check_input_valid(self):
         valid_targetid_input = [800001, 899999]
@@ -140,8 +158,12 @@ class PathPlanner:
             self.system_state["workState"] = False
             return
         for sustar in self.sustarget_list:
-            if not self.point_in_area(sustar.ld_angle, self.task_area) or not self.point_in_area(sustar.ru_angle, self.task_area):
-                self.system_state["msg"] = "sus target area is invalid"
+            x, y = sustar.ld_angle.x, sustar.ld_angle.y
+            sonar_length_geo = self.geod.Direct(y, x, 0, self.sonar_length)
+            sonar_length = sonar_length_geo["lat2"] - y
+            if not self.point_in_area(sustar.ld_angle, self.task_area) or not self.point_in_area(sustar.ru_angle, self.task_area) or \
+                    (sustar.rd_angle.x + sonar_length > self.task_area.rd_angle.x):
+                self.system_state["msg"] = "{} sus target area is invalid".format(sustar.id)
                 self.system_state["inputState"] = 2
                 self.system_state["outputState"] = False
                 self.system_state["workState"] = False
@@ -173,6 +195,18 @@ class PathPlanner:
                 self.system_state["outputState"] = False
                 self.system_state["workState"] = False
                 return
+
+        # input valid
+        self.system_state["msg"] = "ok"
+
+    def print_item(self, item):
+        print(getattr(item, "__class__"), item.ld_angle_extend.x, item.ld_angle_extend.y)
+
+    def print_points_list(self, points_list):
+        i = 0
+        for point in points_list:
+            print(i, point.x, point.y)
+            i += 1
 
     def empty_ves_dict(self):
         self.ves_dict = dict()
@@ -542,9 +576,30 @@ class PathPlanner:
     def remake_assignment_list(self, assignment_list):
         sorted_assignment_list = list()
         for assignment in assignment_list:
-            y_list = [self.sustarget_list[int(x)].center.y for x in assignment]
-            y_list, assignment = zip(*sorted(zip(y_list, assignment)))
-            sorted_assignment_list.append(assignment)
+            # from left to right
+            x_list = [self.sustarget_list[int(_x)].center.x for _x in assignment]
+            x_list, assignment = zip(*sorted(zip(x_list, assignment)))
+            # sorted_assignment_list.append(assignment)
+            n = len(assignment)
+            _assignment = list()
+            dist_matrix = np.ones([n, n])
+            for i in range(n-1):
+                for j in range(i+1, n):
+                    point1 = self.sustarget_list[assignment[i]].center
+                    point2 = self.sustarget_list[assignment[j]].center
+                    dist_matrix[i][j] = compute_dist(point1, point2)
+                    dist_matrix[j][i] = compute_dist(point1, point2)
+            current_id = 0
+            current_area = assignment[current_id]
+            _assignment.append(current_area)
+            while len(_assignment) < n:
+                dist_min = min(dist_matrix[current_id])
+                next_id = np.where(dist_matrix[current_id] == dist_min)[0]
+                dist_matrix[current_id] = np.ones_like(dist_matrix[current_id])
+                dist_matrix[:, current_id] = np.ones_like(dist_matrix[:, current_id])
+                current_id = int(next_id)
+                _assignment.append(assignment[current_id])
+            sorted_assignment_list.append(_assignment)
 
         # 四个船路径不交错
         # 枚举
