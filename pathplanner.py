@@ -5,7 +5,6 @@ import scipy.io as sio
 from datetime import datetime
 import os
 import sys
-from utils import compute_dist
 import time
 import json
 from copy import deepcopy
@@ -19,6 +18,7 @@ if FILE not in sys.path:
 
 from simple_planner import Planner
 from model import Point, Vessel, SusTarget, Target, Area
+from utils import compute_dist
 
 
 class PathPlanner:
