@@ -4,7 +4,6 @@ import random
 import numpy as np
 from numpy import unique, where
 from sklearn.cluster import KMeans, AgglomerativeClustering, MiniBatchKMeans
-from sklearn_som.som import SOM
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
