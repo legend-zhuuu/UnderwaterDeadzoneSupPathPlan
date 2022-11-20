@@ -1,11 +1,11 @@
-numpy==1.23.1
+numpy==1.22.3
 fonttools==4.34.4
-kiwisolver==1.4.4
+kiwisolver==1.4.3
 six==1.16.0
 python_dateutil==2.8.2
 networkx==2.8.5
 scikit_learn==1.1.1
-scipy==1.8.1
+scipy==1.7.3
 joblib==1.1.0
 packaging==21.3
 Pillow==9.2.0
@@ -13,4 +13,4 @@ threadpoolctl==3.1.0
 pyparsing==3.0.9
 cycler==0.11.0
 matplotlib==3.5.2
-geographiclib==2.0
+geographiclib==1.52

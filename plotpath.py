@@ -18,7 +18,9 @@ def plot_path(input_path, output_path):
     task_area = pathPlanner.task_area
 
     # prepare plot
-    fig = plt.figure()
+    fig_x = 20
+    fig_y = 20 / (task_area.rd_angle.x - task_area.ld_angle.x) * (task_area.lu_angle.y - task_area.ld_angle.y)
+    fig = plt.figure(figsize=(fig_x, fig_y))
     ax = fig.add_subplot(111)
     ax.axis([task_area.ld_angle.x - 0.001, task_area.rd_angle.x + 0.001, task_area.ld_angle.y - 0.001, task_area.lu_angle.y + 0.001])
 
@@ -79,4 +81,4 @@ def plot_path(input_path, output_path):
 
 
 if __name__ == "__main__":
-    plot_path(input_path="input/input_test13.json", output_path=None)
+    plot_path(input_path="input/input.json", output_path=None)

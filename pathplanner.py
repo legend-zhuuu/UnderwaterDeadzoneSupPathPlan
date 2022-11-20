@@ -19,6 +19,7 @@ if FILE not in sys.path:
 from simple_planner import Planner
 from model import Point, Vessel, SusTarget, Target, Area
 from utils import compute_dist
+from algorithms import PSO
 
 
 class PathPlanner:
@@ -573,7 +574,13 @@ class PathPlanner:
                     out_point_list = out_point_list[0:index + 1] + insert_obs_point_list + out_point_list[index + 1:]
         return out_point_list[1:]
 
-    def remake_assignment_list(self, assignment_list):
+    def find_nearest_point_index(self, point, point_list):
+        for i in range(len(point_list)):
+            if compute_dist(Point(point), Point(point_list[i])) < 1e-3:
+                return i
+        return 0
+
+    def sorted_by_x(self, assignment_list):
         sorted_assignment_list = list()
         for assignment in assignment_list:
             # from left to right
@@ -600,7 +607,25 @@ class PathPlanner:
                 current_id = int(next_id)
                 _assignment.append(assignment[current_id])
             sorted_assignment_list.append(_assignment)
+        return sorted_assignment_list
 
+    def sorted_by_PSO(self, assignment_list):
+        sorted_assignment_list = list()
+        for assignment in assignment_list:
+            ass_data_list = [list(self.sustarget_list[j].center.to_numpy()) for j in assignment]
+            ass_data = np.array(ass_data_list)
+            model = PSO(num_city=ass_data.shape[0], data=ass_data.copy())
+            Best_path, Best = model.run()
+            new_list = list()
+            for point in Best_path:
+                idx_ass = assignment[self.find_nearest_point_index(point, ass_data_list)]
+                new_list.append(idx_ass)
+            sorted_assignment_list.append(new_list)
+        return sorted_assignment_list
+
+    def remake_assignment_list(self, assignment_list):
+        # sorted_assignment_list = self.sorted_by_x(assignment_list)
+        sorted_assignment_list = self.sorted_by_PSO(assignment_list)
         # 四个船路径不交错
         # 枚举
         new_assignment_list = list()
@@ -744,7 +769,7 @@ class PathPlanner:
             return ves_dict
 
         planner = Planner(self.vessel_list, self.sustarget_list)
-        assignment_list = planner.plan()
+        assignment_list = planner.plan("c_fuzzy")
         # assignment_list = planner.my_plan()
 
         print("tasks allocation end!")

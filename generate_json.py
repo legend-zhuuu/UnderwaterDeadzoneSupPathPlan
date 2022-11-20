@@ -1,6 +1,7 @@
 import numpy as np
 import json
 import random
+from plotpath import plot_path
 
 
 def generate(sustar_num, target_num, ves_num=4):
@@ -12,10 +13,10 @@ def generate(sustar_num, target_num, ves_num=4):
     arguments = {}
     # task area
     task_area = [[121.0, 22.01852], [121.0, 22.0], [121.05556, 22.0], [121.05556, 22.01852], [121.0, 22.01852]]
-    x_min = 121.0
-    x_max = 121.05556
-    y_min = 22.0
-    y_max = 22.01852
+    x_min = 121.00100
+    x_max = 121.05456
+    y_min = 22.00100
+    y_max = 22.01752
 
     sus_tar_x_range = [40/110000, 100/110000]
     sus_tar_y_range = [10/110000, 40/110000]
@@ -51,7 +52,7 @@ def generate(sustar_num, target_num, ves_num=4):
         sus_target_info.append(info)
 
     # vesInfo
-    vesPosBase = [120.9984, 22.01342]
+    vesPosBase = [121.03000, 22.01342]
     interval = 0.002
     ves_info = list()
     for i in range(ves_num):
@@ -92,7 +93,8 @@ def generate(sustar_num, target_num, ves_num=4):
 
 
 if __name__ == "__main__":
-    input_dict = generate(sustar_num=20, target_num=6, ves_num=4)
+    input_dict = generate(sustar_num=100, target_num=0, ves_num=4)
     json_str = json.dumps(input_dict, indent=4)
     with open('input/input.json', 'w') as f:
         f.write(json_str)
+    plot_path(input_path="input/input.json", output_path=None)
